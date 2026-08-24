@@ -1,8 +1,9 @@
 const { shell } = require("electron");
 const buildProfilesMenu = require("./profilesMenu");
+const product = require("../product");
 
 exports = module.exports = (Menus) => ({
-  label: "Teams for Linux",
+  label: product.name,
   submenu: [
     {
       label: "Open",
@@ -194,7 +195,7 @@ function getHelpMenu(Menus) {
     label: "Help",
     submenu: [
       {
-        label: "Teams for Linux Documentation",
+        label: "Outlook for Linux Documentation",
         click: () => Menus.showDocumentation(),
       },
       {
@@ -203,20 +204,20 @@ function getHelpMenu(Menus) {
       {
         label: "Online Documentation",
         click: () =>
-          shell.openExternal("https://support.office.com/en-us/teams"),
+          shell.openExternal("https://support.microsoft.com/en-us/outlook"),
       },
       {
         label: "Github Project",
         click: () =>
           shell.openExternal(
-            "https://github.com/IsmaelMartinez/teams-for-linux"
+            "https://github.com/AntoineGS/outlook-for-linux"
           ),
       },
       {
-        label: "Microsoft Teams Support",
+        label: "Microsoft Outlook Support",
         click: () =>
           shell.openExternal(
-            "https://answers.microsoft.com/en-us/msteams/forum"
+            "https://support.microsoft.com/en-us/outlook"
           ),
       },
     ],

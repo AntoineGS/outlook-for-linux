@@ -17,6 +17,7 @@ const {
   clearStorageForPartitions,
 } = require("../utils/storagePartitions");
 const Tray = require("./tray");
+const { restoreSettingsFromFile } = require("./settings");
 const TrayIconChooser = require("../browser/tools/trayIconChooser");
 const { SpellCheckProvider } = require("../spellCheckProvider");
 const DocumentationWindow = require("../documentationWindow");
@@ -126,7 +127,7 @@ class Menus {
 
   about() {
     const appInfo = [];
-    appInfo.push(`teams-for-linux@${app.getVersion()}\n`);
+    appInfo.push(`${product.name}@${app.getVersion()}\n`);
     for (const prop in process.versions) {
       if (
         prop === "node" ||
@@ -359,30 +360,32 @@ class Menus {
   }
 
   saveSettings() {
-    // Receive Teams settings from renderer to save to file
-    ipcMain.once(product.settingsChannels.get, saveSettingsInternal);
+    ipcMain.once(product.settingsChannels.get, saveSettingsInternal.bind(this));
     this.window.webContents.send(product.settingsChannels.get);
   }
 
   restoreSettings() {
-    // Acknowledge settings restoration completion from renderer
-    ipcMain.once(product.settingsChannels.set, restoreSettingsInternal);
     const settingsPath = path.join(
       app.getPath("userData"),
       product.settingsFile
     );
-    if (fs.existsSync(settingsPath)) {
-      this.window.webContents.send(
-        product.settingsChannels.set,
-        JSON.parse(fs.readFileSync(settingsPath))
-      );
-    } else {
-      dialog.showMessageBoxSync(this.window, {
-        message: "Settings file not found. Using default settings.",
-        title: "Restore settings",
-        type: "warning",
-      });
-    }
+    restoreSettingsFromFile({
+      ipcMain,
+      window: this.window,
+      settingsPath,
+      channel: product.settingsChannels.set,
+      registerAcknowledgement: (handler) =>
+        ipcMain.once(product.settingsChannels.set, handler),
+      warn: (message, error) => {
+        console.warn(message, error?.message);
+        dialog.showMessageBoxSync(this.window, {
+          message,
+          title: "Restore settings",
+          type: "warning",
+        });
+      },
+      onAcknowledged: restoreSettingsInternal.bind(this),
+    });
   }
 
   addProfile() {
@@ -641,7 +644,7 @@ function isSwitcherPillSender(event) {
 
 function saveSettingsInternal(_event, arg) {
   fs.writeFileSync(
-    path.join(app.getPath("userData"), "teams_settings.json"),
+    path.join(app.getPath("userData"), product.settingsFile),
     JSON.stringify(arg)
   );
   dialog.showMessageBoxSync(this.window, {

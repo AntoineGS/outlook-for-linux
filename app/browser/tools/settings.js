@@ -1,4 +1,3 @@
-const ReactHandler = require("./reactHandler");
 const product = require("../../product");
 
 let _Settings_config = new WeakMap();
@@ -20,90 +19,12 @@ class Settings {
   }
 }
 
-function validateSettingsInput(settings) {
-  if (!settings || typeof settings !== 'object') {
-    return false;
-  }
-  
-  if (settings.theme && !['default', 'dark', 'light'].includes(settings.theme)) {
-    console.warn('Settings: Invalid theme value:', settings.theme);
-    return false;
-  }
-
-  if (settings.chatDensity && !['compact', 'comfy'].includes(settings.chatDensity)) {
-    console.warn('Settings: Invalid chatDensity value:', settings.chatDensity);
-    return false;
-  }
-  
-  return true;
+function retrieve(event) {
+  event.sender.send(product.settingsChannels.get, {});
 }
 
-async function retrieve(event) {
-  try {
-    const clientPreferences = ReactHandler.getTeams2ClientPreferences();
-
-    if (!clientPreferences) {
-      console.error("Failed to retrieve Teams settings from react");
-      return;
-    }
-    
-    if (!clientPreferences.theme || !clientPreferences.density) {
-      console.error("Settings: Invalid client preferences structure");
-      return;
-    }
-
-    const settings = {
-      theme: clientPreferences.theme.userTheme,
-      chatDensity: clientPreferences.density.chatDensity,
-    };
-    
-    if (validateSettingsInput(settings)) {
-      event.sender.send(product.settingsChannels.get, settings);
-    } else {
-      console.error("Settings: Retrieved invalid settings data");
-    }
-  } catch (error) {
-    console.error("Settings: Error retrieving settings:", error);
-  }
-}
-
-async function restore(event, ...args) {
-  try {
-    if (!args[0] || typeof args[0] !== 'object') {
-      console.error("Settings: Invalid restore arguments");
-      return;
-    }
-    
-    if (!validateSettingsInput(args[0])) {
-      console.error("Settings: Invalid settings values for restore");
-      return;
-    }
-    
-    const clientPreferences = ReactHandler.getTeams2ClientPreferences();
-
-    if (!clientPreferences) {
-      console.warn("Failed to retrieve Teams settings from react");
-      return;
-    }
-    
-    if (!clientPreferences.theme || !clientPreferences.density) {
-      console.error("Settings: Invalid client preferences structure for restore");
-      return;
-    }
-
-    // Only set validated values
-    if ('theme' in args[0]) {
-      clientPreferences.theme.userTheme = args[0].theme;
-    }
-    if ('chatDensity' in args[0]) {
-      clientPreferences.density.chatDensity = args[0].chatDensity;
-    }
-    
-    event.sender.send(product.settingsChannels.set, true);
-  } catch (error) {
-    console.error("Settings: Error restoring settings:", error);
-    event.sender.send(product.settingsChannels.set, false);
-  }
+function restore(event) {
+  event.sender.send(product.settingsChannels.set, true);
 }
 
 module.exports = new Settings();
