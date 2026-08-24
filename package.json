@@ -1,21 +1,22 @@
 {
-  "name": "teams-for-linux",
-  "version": "2.18.0",
+  "name": "outlook-for-linux",
+  "version": "1.4.0",
+  "desktopName": "outlook-for-linux",
   "main": "app/index.js",
-  "description": "Unofficial client for Microsoft Teams for Linux",
-  "homepage": "https://github.com/IsmaelMartinez/teams-for-linux",
+  "description": "Unofficial client for Microsoft Outlook for Linux",
+  "homepage": "https://github.com/AntoineGS/outlook-for-linux",
   "keywords": [
     "Teams",
     "Microsoft Teams"
   ],
   "repository": {
     "type": "git",
-    "url": "git+ssh://github.com/IsmaelMartinez/teams-for-linux"
+    "url": "git+ssh://github.com/AntoineGS/outlook-for-linux"
   },
   "author": {
-    "name": "Ismael Martinez",
-    "email": "ismaelmartinez@gmail.com",
-    "url": "https://github.com/IsmaelMartinez/"
+    "name": "Antoine Gaudreau Simard, prev. Mahmoud Bahaa, Ismael Martinez",
+    "email": "antoineg.simard@gmail.com",
+    "url": "https://github.com/AntoineGS/"
   },
   "license": "GPL-3.0-or-later",
   "scripts": {
@@ -77,14 +78,14 @@
     "follow-redirects": "^1.16.0"
   },
   "build": {
-    "appId": "teams-for-linux",
+    "appId": "outlook-for-linux",
     "asarUnpack": [
       "node_modules/spellchecker/vendor/hunspell_dictionaries"
     ],
     "protocols": {
-      "name": "msteams",
+      "name": "msoutlook",
       "schemes": [
-        "msteams"
+        "msoutlook"
       ]
     },
     "extraResources": [
@@ -96,16 +97,18 @@
     "linux": {
       "category": "Chat;Network;Office",
       "packageCategory": "net",
-      "executableName": "teams-for-linux",
-      "synopsis": "Teams for Linux",
-      "description": "Unofficial Microsoft Teams client for Linux using Electron. It uses the Web App and wraps it as a standalone application using Electron.",
+      "executableName": "outlook-for-linux",
+      "syncDesktopName": true,
+      "synopsis": "Outlook for Linux",
+      "description": "Unofficial Microsoft Outlook client for Linux using Electron. It uses the Web App and wraps it as a standalone application using Electron.",
       "executableArgs": [
         "--ozone-platform=x11"
       ],
       "desktop": {
         "entry": {
-          "Name": "Teams for Linux",
-          "Comment": "Unofficial client for Microsoft Teams for Linux"
+          "Name": "Outlook for Linux",
+          "Comment": "Unofficial client for Microsoft Outlook for Linux",
+          "StartupWMClass": "outlook-for-linux"
         }
       },
       "target": [
@@ -151,7 +154,7 @@
         "snapStore"
       ],
       "core24": {
-        "summary": "Teams for Linux",
+        "summary": "Outlook for Linux",
         "confinement": "strict",
         "grade": "stable",
         "useLXD": true,
@@ -172,10 +175,6 @@
     },
     "mac": {
       "category": "public.app-category.productivity",
-      "extendInfo": {
-        "NSCameraUsageDescription": "We need camera access for video calls.",
-        "NSMicrophoneUsageDescription": "We need microphone access for audio."
-      },
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist"
