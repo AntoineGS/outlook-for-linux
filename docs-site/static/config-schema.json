@@ -1,7 +1,7 @@
 {
   "$generatedBy": "scripts/generateConfigDocs.js",
   "source": "app/config/options.js",
-  "optionCount": 74,
+  "optionCount": 75,
   "options": [
     {
       "name": "appActiveCheckInterval",
@@ -78,7 +78,7 @@
     {
       "name": "appTitle",
       "type": "string",
-      "default": "Microsoft Teams",
+      "default": "Microsoft Outlook",
       "description": "A text to be suffixed with page title",
       "applyMode": "restart"
     },
@@ -615,7 +615,7 @@
     {
       "name": "partition",
       "type": "string",
-      "default": "persist:teams-4-linux",
+      "default": "persist:outlook-4-linux",
       "description": "BrowserWindow webpreferences partition",
       "applyMode": "restart"
     },
@@ -711,8 +711,15 @@
     {
       "name": "url",
       "type": "string",
-      "default": "https://teams.cloud.microsoft",
-      "description": "Microsoft Teams URL",
+      "default": "https://outlook.office.com/",
+      "description": "Microsoft Outlook URL",
+      "applyMode": "restart"
+    },
+    {
+      "name": "customUserDir",
+      "type": "string",
+      "default": null,
+      "description": "Custom user data directory",
       "applyMode": "restart"
     },
     {

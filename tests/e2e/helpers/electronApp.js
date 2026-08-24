@@ -2,17 +2,14 @@ import { _electron as electron } from 'playwright';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import product from '../../../app/product.js';
 
 // Shared scaffolding for the multi-account E2E specs (and any future
 // flag-toggle test). Keeps the launch/discover/cleanup boilerplate in
 // one place so each spec can stay focused on its assertions.
 
-const TEAMS_HOSTNAMES = new Set([
-  'teams.cloud.microsoft',
-  'teams.microsoft.com',
-  'teams.live.com',
-  'login.microsoftonline.com',
-]);
+export const isOutlookOrAuthHost = (hostname) =>
+  product.isAppHost(hostname) || product.isAuthHost(hostname);
 
 export const PROFILE_IPC_CHANNELS = [
   'profile-list',
@@ -77,14 +74,14 @@ export async function startApp({ prefix, config, allowEval = false }) {
 }
 
 /**
- * Find the main Teams window in an electronApp by hostname match. Returns
- * undefined if no window has navigated to a Teams or Microsoft login URL.
+ * Find the main Outlook window in an electronApp by approved hostname.
+ * Returns undefined until an Outlook or Microsoft login URL is loaded.
  */
-export function findMainTeamsWindow(electronApp) {
+export function findMainOutlookWindow(electronApp) {
   return electronApp.windows().find((w) => {
     const url = w.url();
     try {
-      return TEAMS_HOSTNAMES.has(new URL(url).hostname);
+      return isOutlookOrAuthHost(new URL(url).hostname);
     } catch {
       return false;
     }
@@ -149,16 +146,16 @@ export async function getEventHandlerCounts(electronApp, channels) {
  * `{ error }` if the main window can't be found.
  */
 export async function getContentViewChildBounds(electronApp) {
-  return await electronApp.evaluate(({ BrowserWindow }) => {
-    const hosts = new Set([
-      'teams.cloud.microsoft',
-      'teams.microsoft.com',
-      'teams.live.com',
-      'login.microsoftonline.com',
-    ]);
+  return await electronApp.evaluate(({ BrowserWindow }, approvedHosts) => {
+    const isApprovedHost = (hostname) => {
+      const canonical = hostname.endsWith('.mcas.ms')
+        ? hostname.slice(0, -'.mcas.ms'.length)
+        : hostname;
+      return approvedHosts.includes(canonical);
+    };
     const isMain = (w) => {
       try {
-        return hosts.has(new URL(w.webContents.getURL()).hostname);
+        return isApprovedHost(new URL(w.webContents.getURL()).hostname);
       } catch {
         return false;
       }
@@ -181,7 +178,7 @@ export async function getContentViewChildBounds(electronApp) {
         }
       }),
     };
-  });
+  }, [...product.appHosts, ...product.authHosts]);
 }
 
 /**

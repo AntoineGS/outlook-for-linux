@@ -26,6 +26,7 @@
 // defaults.js is a pure data module (no Electron imports), so requiring it here
 // keeps options.js loadable by the generator outside Electron.
 const defaults = require("./defaults");
+const product = require("../product");
 
 module.exports = {
       appActiveCheckInterval: {
@@ -93,7 +94,7 @@ module.exports = {
         applyMode: "restart",
       },
       appTitle: {
-        default: "Microsoft Teams",
+        default: product.appTitle,
         describe: "A text to be suffixed with page title",
         type: "string",
         applyMode: "restart",
@@ -568,7 +569,7 @@ module.exports = {
         applyMode: "restart",
       },
       partition: {
-        default: "persist:teams-4-linux",
+        default: product.partition,
         describe: "BrowserWindow webpreferences partition",
         type: "string",
         applyMode: "restart",
@@ -663,8 +664,14 @@ module.exports = {
         applyMode: "restart",
       },
       url: {
-        default: "https://teams.cloud.microsoft",
-        describe: "Microsoft Teams URL",
+        default: product.defaultUrl,
+        describe: "Microsoft Outlook URL",
+        type: "string",
+        applyMode: "restart",
+      },
+      customUserDir: {
+        default: null,
+        describe: "Custom user data directory",
         type: "string",
         applyMode: "restart",
       },

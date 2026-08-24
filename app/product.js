@@ -20,12 +20,7 @@ function stripMcasSuffix(hostname) {
 
 function matchesHost(hostname, hosts) {
   const canonical = stripMcasSuffix(hostname.toLowerCase());
-  return hosts.some(
-    (host) =>
-      canonical === host ||
-      (canonical.endsWith(`.${host}`) &&
-        !canonical.slice(0, -(host.length + 1)).includes(".")),
-  );
+  return hosts.includes(canonical);
 }
 
 module.exports = Object.freeze({

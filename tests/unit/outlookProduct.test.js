@@ -39,25 +39,16 @@ describe("Outlook product contract", () => {
     });
   });
 
-  it("matches exact hosts and their immediate subdomains", () => {
-    assert.equal(
-      product.stripMcasSuffix("outlook.office.com.mcas.ms"),
-      "outlook.office.com",
-    );
-    assert.equal(
-      product.stripMcasSuffix("outlook.office.com"),
-      "outlook.office.com",
-    );
+  it("matches exact hosts after MCAS normalization", () => {
+    assert.equal(product.stripMcasSuffix("outlook.office.com.mcas.ms"), "outlook.office.com");
+    assert.equal(product.stripMcasSuffix("outlook.office.com"), "outlook.office.com");
     assert.equal(product.isAppHost("outlook.office.com"), true);
-    assert.equal(product.isAppHost("sub.outlook.office.com"), true);
+    assert.equal(product.isAppHost("sub.outlook.office.com"), false);
     assert.equal(product.isAppHost("deep.sub.outlook.office.com"), false);
     assert.equal(product.isAppHost("outlook.office.com.evil.example"), false);
     assert.equal(product.isAppHost("eviloutlook.office.com"), false);
     assert.equal(product.isAuthHost("login.microsoftonline.com"), true);
-    assert.equal(product.isAuthHost("sub.login.microsoftonline.com"), true);
-    assert.equal(
-      product.isAuthHost("login.microsoftonline.com.evil.example"),
-      false,
-    );
+    assert.equal(product.isAuthHost("sub.login.microsoftonline.com"), false);
+    assert.equal(product.isAuthHost("login.microsoftonline.com.evil.example"), false);
   });
 });

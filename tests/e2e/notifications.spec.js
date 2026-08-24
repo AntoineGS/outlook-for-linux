@@ -3,6 +3,7 @@ import { _electron as electron } from 'playwright';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { isOutlookOrAuthHost } from './helpers/electronApp.js';
 
 /**
  * Notification lifecycle tests.
@@ -19,7 +20,7 @@ import { join } from 'node:path';
  */
 
 async function launchApp(notificationMethod) {
-  const userDataDir = mkdtempSync(join(tmpdir(), 'teams-e2e-notif-'));
+  const userDataDir = mkdtempSync(join(tmpdir(), 'outlook-e2e-notif-'));
   const electronApp = await electron.launch({
     args: [
       './app/index.js',
@@ -32,16 +33,13 @@ async function launchApp(notificationMethod) {
   return { electronApp, userDataDir };
 }
 
-const TEAMS_HOSTNAMES = new Set(['teams.cloud.microsoft', 'teams.microsoft.com',
-  'teams.live.com', 'login.microsoftonline.com']);
-
 async function getMainWindow(electronApp) {
   await electronApp.firstWindow({ timeout: 30000 });
   const deadline = Date.now() + 30000;
 
   while (Date.now() < deadline) {
     const mainWindow = electronApp.windows().find(w => {
-      try { return TEAMS_HOSTNAMES.has(new URL(w.url()).hostname); }
+      try { return isOutlookOrAuthHost(new URL(w.url()).hostname); }
       catch { return false; }
     });
     if (mainWindow) return mainWindow;

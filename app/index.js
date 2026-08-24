@@ -33,6 +33,8 @@ const IdleMonitor = require("./idle/monitor");
 const AutoUpdater = require("./autoUpdater");
 const WebAuthn = require("./webauthn");
 const os = require("node:os");
+const product = require("./product");
+const { getAuthoritativeSenderUrl } = require("./mainAppWindow/authRecoverySource");
 const isMac = os.platform() === "darwin";
 
 const { NETWORK_ERROR_PATTERNS } = require("./config/defaults");
@@ -190,7 +192,7 @@ if (isMac) {
   requestMediaAccess();
 }
 
-const protocolClient = "msteams";
+const protocolClient = product.protocol;
 if (!app.isDefaultProtocolClient(protocolClient, process.execPath)) {
   app.setAsDefaultProtocolClient(protocolClient, process.execPath);
 }
@@ -287,7 +289,7 @@ if (gotTheLock) {
   });
 
   // Log renderer-side unhandled promise rejections
-  ipcMain.on("unhandled-rejection", (_event, errorData) => {
+  ipcMain.on("unhandled-rejection", (event, errorData) => {
     // Payload is constructed and length-capped in app/browser/preload.js;
     // prior to this handler + the ipcValidator allowlist entry these
     // messages were silently dropped. Fields are run through
@@ -305,21 +307,24 @@ if (gotTheLock) {
       // Some auth failures only surface as unhandled promise rejections from MSAL
       // token warming (e.g. "interaction_required"/"InteractionRequired" from
       // acquireTokenV2) and never hit console-message or window-error — feed the
-      // raw (unsanitized) message to auth-failure detection. Rejections carry no
-      // source URL, so detection's trusted-source check is skipped (empty source).
+      // raw (unsanitized) message to auth-failure detection. The source must come
+      // from Electron's sender frame, never from renderer payload data.
       // The pre-login-noise check above only down-levels the LOG; it must not
       // gate detection: the reliable "InteractionRequired" signal arrives inside
       // these noise-matched messages, so always forward. maybeScheduleAuthRecovery
       // does its own filtering and only acts on InteractionRequired /
       // interaction_required (login_required and AuthFailed are logged, not acted on).
-      mainAppWindow.notifyRendererError(errorData?.message, undefined);
+      mainAppWindow.notifyRendererError(
+        errorData?.message,
+        getAuthoritativeSenderUrl(event),
+      );
     } catch (err) {
       console.error("[Renderer] Failed to log unhandled-rejection:", err);
     }
   });
 
   // Log renderer-side uncaught window errors
-  ipcMain.on("window-error", (_event, errorData) => {
+  ipcMain.on("window-error", (event, errorData) => {
     try {
       const preLoginNoise = isPreLoginAuthNoise(errorData?.message);
       const log = preLoginNoise ? console.debug : console.error;
@@ -333,10 +338,12 @@ if (gotTheLock) {
       });
       // Some auth failures only surface as uncaught worker errors (e.g.
       // "Uncaught Error: UPR:") that never hit the console-message path —
-      // feed the raw (unsanitized) message to auth-failure detection. As with
-      // the unhandled-rejection handler, pre-login-noise down-levelling controls
-      // only the log level, never whether detection sees the signal.
-      mainAppWindow.notifyRendererError(errorData?.message, errorData?.filename);
+      // feed the raw (unsanitized) message to auth-failure detection. The source
+      // must come from Electron's sender frame, not renderer-provided filename.
+      mainAppWindow.notifyRendererError(
+        errorData?.message,
+        getAuthoritativeSenderUrl(event),
+      );
     } catch (err) {
       console.error("[Renderer] Failed to log window-error:", err);
     }

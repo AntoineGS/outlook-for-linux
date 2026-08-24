@@ -3,6 +3,11 @@ const { app } = require("electron");
 class CommandLineManager {
   // Must be called before app.getPath('userData')
   static addSwitchesBeforeConfigLoad() {
+    const customUserDir = app.commandLine.getSwitchValue("customUserDir");
+    if (customUserDir && !process.env.E2E_USER_DATA_DIR) {
+      app.setPath("userData", customUserDir);
+    }
+
     app.commandLine.appendSwitch("try-supported-channel-layouts");
 
     // Allow audio playback without requiring a prior user gesture.

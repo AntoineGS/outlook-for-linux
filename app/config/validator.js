@@ -7,6 +7,20 @@
 
 const MAX_NESTED_DEPTH = 8;
 
+const OUTLOOK_IGNORED_OPTIONS = new Set([
+  "screenSharing",
+  "awayOnSystemIdle",
+  "isCustomBackgroundEnabled",
+  "customStickers",
+  "enableIncomingCallToast",
+  "incomingCallCommand",
+  "meetupJoinRegEx",
+  "msTeamsProtocols",
+  "media",
+  "mqtt",
+  "quickChat",
+]);
+
 function typeName(value) {
   if (Array.isArray(value)) return "array";
   if (value === null) return "null";
@@ -118,8 +132,13 @@ function validateConfigFile(configFile, optionDefinitions) {
     return warnings;
   }
 
+  const isOutlookConfig = optionDefinitions.appTitle?.default === "Microsoft Outlook";
+
   try {
     for (const [key, value] of Object.entries(configFile)) {
+      if (isOutlookConfig && OUTLOOK_IGNORED_OPTIONS.has(key)) {
+        warnings.push(`${key} is ignored by Outlook for Linux`);
+      }
       const def = Object.hasOwn(optionDefinitions, key)
         ? optionDefinitions[key]
         : undefined;

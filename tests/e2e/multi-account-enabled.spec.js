@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   startApp,
-  findMainTeamsWindow,
+  findMainOutlookWindow,
   waitForLoginRedirect,
   getRegisteredHandlers,
   getEventHandlerCounts,
@@ -20,7 +20,7 @@ import {
 // initialization or the bootstrap check breaks the startup sequence.
 test('multi-account enabled, no profiles yet = same redirect to Microsoft login', async () => {
   const ctx = await startApp({
-    prefix: 'teams-e2e-enabled-',
+    prefix: 'outlook-e2e-enabled-',
     config: { multiAccount: { enabled: true } },
     // Need `electronApp.evaluate` to introspect ipcMain._invokeHandlers
     // and to call the profile-list handler directly.
@@ -30,7 +30,7 @@ test('multi-account enabled, no profiles yet = same redirect to Microsoft login'
   try {
     expect(ctx.electronApp.windows().length).toBeGreaterThan(0);
 
-    const mainWindow = findMainTeamsWindow(ctx.electronApp);
+    const mainWindow = findMainOutlookWindow(ctx.electronApp);
     expect(mainWindow).toBeTruthy();
     await waitForLoginRedirect(mainWindow);
 
@@ -103,13 +103,13 @@ test('multi-account enabled, no profiles yet = same redirect to Microsoft login'
 // list order. Unpinned profiles get no accelerator.
 test('pinning caps at 5 and maps Ctrl+Alt accelerators onto pinned profiles', async () => {
   const ctx = await startApp({
-    prefix: 'teams-e2e-pin-',
+    prefix: 'outlook-e2e-pin-',
     config: { multiAccount: { enabled: true } },
     allowEval: true,
   });
 
   try {
-    const mainWindow = findMainTeamsWindow(ctx.electronApp);
+    const mainWindow = findMainOutlookWindow(ctx.electronApp);
     expect(mainWindow).toBeTruthy();
     await waitForLoginRedirect(mainWindow);
 
@@ -165,13 +165,13 @@ test('pinning caps at 5 and maps Ctrl+Alt accelerators onto pinned profiles', as
 // the switcher pill topmost (the #raiseChrome re-assert after addChildView).
 test('switching to a profile view fills the window and keeps the pill topmost', async () => {
   const ctx = await startApp({
-    prefix: 'teams-e2e-switch-',
+    prefix: 'outlook-e2e-switch-',
     config: { multiAccount: { enabled: true } },
     allowEval: true,
   });
 
   try {
-    const mainWindow = findMainTeamsWindow(ctx.electronApp);
+    const mainWindow = findMainOutlookWindow(ctx.electronApp);
     expect(mainWindow).toBeTruthy();
     await waitForLoginRedirect(mainWindow);
 

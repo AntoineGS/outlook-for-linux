@@ -1,9 +1,10 @@
 const { ipcRenderer } = require("electron");
+const product = require("../product");
 
 // #2677: Electron removed the non-standard `File.path` from dropped files, so
 // Teams (which uploads by native path) rejects them as "File is missing data".
 // Restore it via webUtils.getPathForFile before Teams's drop handler reads it,
-// scoped to Teams hosts so the SSO/auth pages this window also loads can't read
+// scoped to Outlook hosts so the SSO/auth pages this window also loads can't read
 // local paths off dropped files.
 //
 // The same stripping hits pasted files: when a user copies an image file
@@ -14,18 +15,6 @@ const { ipcRenderer } = require("electron");
 // as a Blob with no path and is unaffected.
 try {
   const { webUtils } = require("electron");
-  const TEAMS_HOSTS = ["teams.cloud.microsoft", "teams.microsoft.com", "teams.live.com"];
-  const isTeamsHost = (hostname) => {
-    if (hostname.endsWith(".mcas.ms")) {
-      hostname = hostname.slice(0, -".mcas.ms".length);
-    }
-    return TEAMS_HOSTS.some(
-      (domain) =>
-        hostname === domain ||
-        (hostname.endsWith("." + domain) &&
-          !hostname.slice(0, -(domain.length + 1)).includes(".")),
-    );
-  };
   // Restore the non-standard `File.path` on every File in a FileList, in place.
   // No-op for blob-backed files (screenshots) since webUtils only resolves a
   // path for files that originated from the OS file list; those are left as-is.
@@ -55,7 +44,7 @@ try {
   globalThis.addEventListener(
     "drop",
     (event) => {
-      if (!isTeamsHost(globalThis.location.hostname)) {
+      if (!product.isAppHost(globalThis.location.hostname)) {
         return;
       }
       restoreFilePaths(event.dataTransfer?.files);
@@ -65,7 +54,7 @@ try {
   globalThis.addEventListener(
     "paste",
     (event) => {
-      if (!isTeamsHost(globalThis.location.hostname)) {
+      if (!product.isAppHost(globalThis.location.hostname)) {
         return;
       }
       restoreFilePaths(event.clipboardData?.files);
