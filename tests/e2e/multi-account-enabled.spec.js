@@ -47,7 +47,7 @@ test('multi-account enabled, no profiles yet = same redirect to Microsoft login'
       ).toBe(true);
     }
 
-    // With no prior cookies on persist:teams-4-linux, the bootstrap
+    // With no prior cookies on persist:outlook-4-linux, the bootstrap
     // heuristic should skip — `app.profiles` stays empty.
     const profiles = await ctx.electronApp.evaluate(({ ipcMain }) => {
       const map = ipcMain._invokeHandlers;
@@ -93,6 +93,24 @@ test('multi-account enabled, no profiles yet = same redirect to Microsoft login'
     expect(pill.height).toBe(SWITCHER_PILL_SIZE);
     expect(pill.y).toBe(view.contentHeight - SWITCHER_PILL_SIZE);
     expect(view.urls[0]).toMatch(/profileSwitcher\/switcher\.html$/);
+  } finally {
+    await closeAndCleanup(ctx);
+  }
+});
+
+test('multi-account enabled creates Outlook profile partitions', async () => {
+  const ctx = await startApp({
+    prefix: 'outlook-e2e-partition-',
+    config: { multiAccount: { enabled: true } },
+    allowEval: true,
+  });
+
+  try {
+    const profile = await invokeHandler(ctx.electronApp, 'profile-add', [
+      { name: 'Second Outlook account' },
+    ]);
+    expect(profile.result.partition).toMatch(/^persist:outlook-profile-/);
+    expect(profile.result.partition).not.toMatch(/teams/i);
   } finally {
     await closeAndCleanup(ctx);
   }

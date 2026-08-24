@@ -1,10 +1,11 @@
 const { ipcMain } = require("electron");
 const { EventEmitter } = require("node:events");
 const crypto = require("node:crypto");
+const product = require("../product");
 
 const STORE_KEY = "app.profiles";
-const PARTITION_PREFIX = "persist:teams-profile-";
-const LEGACY_PARTITION = "persist:teams-4-linux";
+const PARTITION_PREFIX = product.profilePartitionPrefix;
+const LEGACY_PARTITION = product.partition;
 
 // Free-text caps so a renderer-supplied string cannot land oversized in CSS
 // (avatarColor) or DOM text (avatarInitials, url) once Phase 1c wires the

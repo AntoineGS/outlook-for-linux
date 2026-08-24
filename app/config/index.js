@@ -7,6 +7,7 @@ const configOptions = require("./options");
 const { validateConfigFile } = require("./validator");
 const { buildDeprecationWarning } = require("./deprecation");
 const { applyRenamedOptions } = require("./renames");
+const product = require("../product");
 
 function getConfigFilePath(configPath) {
   return path.join(configPath, "config.json");
@@ -168,7 +169,8 @@ function argv(configPath, appVersion) {
   if (configObject.isConfigFile) {
     const validationWarnings = validateConfigFile(
       configObject.configFile,
-      configOptions
+      configOptions,
+      product,
     );
     for (const warning of validationWarnings) {
       console.warn(`[CONFIG] ${warning}`);

@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const options = require("../../app/config/options");
 const { validateConfigFile } = require("../../app/config/validator");
+const product = require("../../app/product");
 
 describe("Outlook configuration defaults", () => {
   it("uses Outlook product defaults and exposes the legacy profile option", () => {
@@ -29,7 +30,7 @@ describe("Outlook configuration defaults", () => {
       quickChat: secret,
     };
 
-    const warnings = validateConfigFile(teamsOnlyConfig, options);
+    const warnings = validateConfigFile(teamsOnlyConfig, options, product);
 
     for (const key of Object.keys(teamsOnlyConfig)) {
       assert.ok(
@@ -38,5 +39,27 @@ describe("Outlook configuration defaults", () => {
       );
     }
     assert.ok(!warnings.join("\n").includes(secret));
+  });
+
+  it("warns for newly unsupported options without exposing values", () => {
+    const value = "sensitive-command-output";
+    const warnings = validateConfigFile(
+      {
+        incomingCallCommandArgs: [value],
+        onNewWindowOpenMeetupJoinUrlInApp: value,
+        graphApi: { token: value },
+      },
+      options,
+      product,
+    );
+
+    for (const key of [
+      "incomingCallCommandArgs",
+      "onNewWindowOpenMeetupJoinUrlInApp",
+      "graphApi",
+    ]) {
+      assert.ok(warnings.includes(`${key} is ignored by Outlook for Linux`));
+    }
+    assert.ok(!warnings.join("\n").includes(value));
   });
 });

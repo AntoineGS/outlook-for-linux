@@ -13,8 +13,8 @@ describe('ssoPasswordPrefill.isLoginUrl', () => {
     assert.strictEqual(isLoginUrl('https://login.live.com/'), true);
   });
 
-  it('matches subdomains of a login host', () => {
-    assert.strictEqual(isLoginUrl('https://eu.login.microsoftonline.com/'), true);
+  it('rejects unlisted login subdomains and lookalikes', () => {
+    assert.strictEqual(isLoginUrl('https://eu.login.microsoftonline.com/'), false);
   });
 
   it('rejects http:// even on a recognised login host (no cleartext secrets)', () => {
@@ -42,6 +42,11 @@ describe('ssoPasswordPrefill.isLoginUrl', () => {
     assert.strictEqual(isLoginUrl('http://adfs.example.org/', ['example.org']), false);
     // Without the extra host configured, the federated host is not matched.
     assert.strictEqual(isLoginUrl('https://adfs.example.org/'), false);
+  });
+
+  it('accepts exact approved MCAS-normalized authentication hosts', () => {
+    assert.strictEqual(isLoginUrl('https://login.microsoftonline.com.mcas.ms/'), true);
+    assert.strictEqual(isLoginUrl('https://eu.login.microsoftonline.com.mcas.ms/'), false);
   });
 
   it('returns false for malformed or missing URLs', () => {

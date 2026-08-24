@@ -61,7 +61,7 @@ jobs:
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:snap -- --publish always
+        run: npm run dist:linux:snap -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -71,7 +71,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-snap-x64
+          name: outlook-for-linux-snap-x64
           path: dist/*.snap
           retention-days: 30
           compression-level: 0
@@ -125,7 +125,7 @@ jobs:
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:snap:armv7l -- --publish always
+        run: npm run dist:linux:snap:armv7l -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -135,7 +135,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-snap-armv7l
+          name: outlook-for-linux-snap-armv7l
           path: dist/*.snap
           retention-days: 30
           compression-level: 0
@@ -190,7 +190,7 @@ jobs:
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:snap:arm64 -- --publish always
+        run: npm run dist:linux:snap:arm64 -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -200,8 +200,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-snap-arm64
+          name: outlook-for-linux-snap-arm64
           path: dist/*.snap
           retention-days: 30
           compression-level: 0
-

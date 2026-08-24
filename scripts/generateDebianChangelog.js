@@ -14,11 +14,11 @@ async function generateDebianChangelog(projectRoot = null) {
 
   const appdataPath = path.join(
     root,
-    "com.github.IsmaelMartinez.teams_for_linux.appdata.xml"
+    "io.github.AntoineGS.outlook_for_linux.appdata.xml"
   );
   if (!fs.existsSync(appdataPath)) {
     throw new Error(
-      "com.github.IsmaelMartinez.teams_for_linux.appdata.xml not found."
+      "io.github.AntoineGS.outlook_for_linux.appdata.xml not found."
     );
   }
 
@@ -55,7 +55,7 @@ async function generateDebianChangelog(projectRoot = null) {
       }
     }
 
-    changelogContent += `teams-for-linux (${version}) stable; urgency=medium\n\n`;
+    changelogContent += `outlook-for-linux (${version}) stable; urgency=medium\n\n`;
     changelogContent += `${releaseNotes}\n\n`;
     changelogContent += ` -- Ismael Martinez <ismaelmartinez@gmail.com>  ${debianDate}\n\n`;
   }

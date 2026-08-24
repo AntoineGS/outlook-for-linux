@@ -141,11 +141,13 @@ jobs:
           npm run postinstall
 
       - name: Validate Release Notes
-        run: npm run generate-release-info
+        run: |
+          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
+          npm run generate-release-info
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:x64 -- --publish always
+        run: npm run dist:linux:x64 -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -155,7 +157,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-linux-x64
+          name: outlook-for-linux-linux-x64
           path: |
             dist/*.deb
             dist/*.rpm
@@ -188,11 +190,13 @@ jobs:
           npm run postinstall
 
       - name: Validate Release Notes
-        run: npm run generate-release-info
+        run: |
+          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
+          npm run generate-release-info
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:arm64 -- --publish always
+        run: npm run dist:linux:arm64 -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -202,7 +206,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-linux-arm64
+          name: outlook-for-linux-linux-arm64
           path: |
             dist/*.deb
             dist/*.rpm
@@ -235,11 +239,13 @@ jobs:
           npm run postinstall
 
       - name: Validate Release Notes
-        run: npm run generate-release-info
+        run: |
+          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
+          npm run generate-release-info
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:arm -- --publish always
+        run: npm run dist:linux:arm -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -249,7 +255,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-linux-armv7l
+          name: outlook-for-linux-linux-armv7l
           path: |
             dist/*.deb
             dist/*.rpm
@@ -282,11 +288,13 @@ jobs:
           npm run postinstall
 
       - name: Validate Release Notes
-        run: npm run generate-release-info
+        run: |
+          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
+          npm run generate-release-info
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:mac:x64 -- --publish always
+        run: npm run dist:mac:x64 -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -296,7 +304,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-macos-x64
+          name: outlook-for-linux-macos-x64
           path: dist/*.dmg
           retention-days: 30
           compression-level: 6
@@ -325,11 +333,13 @@ jobs:
           npm run postinstall
 
       - name: Validate Release Notes
-        run: npm run generate-release-info
+        run: |
+          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
+          npm run generate-release-info
 
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:windows -- --publish always
+        run: npm run dist:windows -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
@@ -339,8 +349,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: teams-for-linux-windows-x64
+          name: outlook-for-linux-windows-x64
           path: dist/*.exe
           retention-days: 30
           compression-level: 6
-

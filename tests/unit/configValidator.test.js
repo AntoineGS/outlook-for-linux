@@ -3,6 +3,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { validateConfigFile } = require('../../app/config/validator');
+const product = require('../../app/product');
 
 // Inline fixtures — deliberately NOT the real app/config/options.js, so these
 // tests stay independent of schema edits made elsewhere.
@@ -223,4 +224,16 @@ describe('Config Validator - review follow-ups', () => {
 		assert.strictEqual(warnings.length, 1);
 		assert.match(warnings[0], /Unknown config option "__proto__"/);
 	});
+});
+
+describe('Config Validator - explicit product capability', () => {
+  it('does not infer Outlook behavior from an appTitle string', () => {
+    const definitions = {
+      appTitle: { default: 'Teams', type: 'string' },
+      mqtt: { default: {}, type: 'object' },
+    };
+    const warnings = validateConfigFile({ mqtt: {} }, definitions, product);
+
+    assert.deepStrictEqual(warnings, ['mqtt is ignored by Outlook for Linux']);
+  });
 });

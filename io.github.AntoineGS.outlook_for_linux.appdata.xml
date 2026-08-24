@@ -1,30 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <component type="desktop-application">
-  <id>com.github.IsmaelMartinez.teams_for_linux</id>
+  <id>io.github.AntoineGS.outlook_for_linux</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0</project_license>
-  <name>Portal for Teams</name>
-  <summary>Unofficial Microsoft Teams client for Linux</summary>
+  <name>Outlook for Linux</name>
+  <summary>Unofficial Microsoft Outlook client for Linux</summary>
   <description>
-    <p>Experience seamless integration with the Microsoft Teams Web App in a standalone Electron application.</p>
-    <p>This application is an unofficial client for Microsoft Teams.</p>
+    <p>Experience Microsoft Outlook on Linux in a standalone Electron application that wraps the Outlook web app.</p>
+    <p>This application is an unofficial client and is not affiliated with Microsoft.</p>
   </description>
-  <url type="homepage">https://github.com/IsmaelMartinez/teams-for-linux</url>
-  <url type="help">https://github.com/IsmaelMartinez/teams-for-linux/blob/main/KNOWN_ISSUES.md</url>
-  <url type="bugtracker">https://github.com/IsmaelMartinez/teams-for-linux/issues</url>
-  <launchable type="desktop-id">com.github.IsmaelMartinez.teams_for_linux.desktop</launchable>
+  <url type="homepage">https://github.com/AntoineGS/outlook-for-linux</url>
+  <url type="help">https://github.com/AntoineGS/outlook-for-linux/blob/main/README.md</url>
+  <url type="bugtracker">https://github.com/AntoineGS/outlook-for-linux/issues</url>
+  <launchable type="desktop-id">outlook-for-linux.desktop</launchable>
   <releases>
     <release version="2.18.0" date="2026-08-24">
       <description>
         <ul>
-          <li>menus: add a menu option to choose a custom app icon (#2895)</li>
-          <li>webauthn: show a prompt while waiting for a security key touch (#2779)</li>
-          <li>packaging: recommend fido2-tools in deb and rpm packages (#2887)</li>
-          <li>webauthn: give reconstructed authenticator responses their real prototypes (#2890)</li>
-          <li>webauthn: return PublicKeyCredential-compatible responses (#2878)</li>
-          <li>adr: add ADR-028 to the docs sidebar (#2884) (cfe4ce9), closes #2609</li>
-          <li>labels: ignore maintainer replies and cover PRs in awaiting-feedback removal (#2896)</li>
-          <li>deps: bump the minor-and-patch group with 4 updates (#2901)</li>
+          <li>Initial Outlook for Linux fork release based on Teams for Linux.</li>
+          <li>Wraps the Microsoft Outlook web app in a native Electron desktop client.</li>
+          <li>Rebrands the application, package metadata, and desktop integration for Outlook.</li>
         </ul>
       </description>
     </release>
@@ -2735,29 +2730,7 @@
       </description>
     </release>
   </releases>
-  <developer_name>Ismael Martinez</developer_name>
-  <screenshots>
-    <screenshot type="default">
-      <image type="source">https://iili.io/sUyRS9.png</image>
-      <caption>General Chat</caption>
-    </screenshot>
-    <screenshot>
-      <image type="source">https://iili.io/sUyuFS.png</image>
-      <caption>Calendar view</caption>
-    </screenshot>
-    <screenshot>
-      <image type="source">https://iili.io/sUyAc7.png</image>
-      <caption>Logging screen</caption>
-    </screenshot>
-    <screenshot>
-      <image type="source">https://iili.io/sUyIP2.png</image>
-      <caption>Call</caption>
-    </screenshot>
-    <screenshot>
-      <image type="source">https://iili.io/sUy79e.png</image>
-      <caption>Screen sharing</caption>
-    </screenshot>
-  </screenshots>
+  <developer_name>AntoineGS</developer_name>
   <content_rating type="oars-1.0">
     <content_attribute id="violence-cartoon">none</content_attribute>
     <content_attribute id="violence-fantasy">none</content_attribute>
@@ -2781,10 +2754,12 @@
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
   <keywords>
-    <keyword>teams for linux</keyword>
-    <keyword>microsoft teams client</keyword>
-    <keyword>linux chat app</keyword>
-    <keyword>unofficial microsoft teams</keyword>
-    <keyword>team collaboration software</keyword>
+    <keyword>outlook</keyword>
+    <keyword>microsoft outlook</keyword>
+    <keyword>outlook for linux</keyword>
+    <keyword>mail</keyword>
+    <keyword>email</keyword>
+    <keyword>calendar</keyword>
+    <keyword>productivity</keyword>
   </keywords>
 </component>

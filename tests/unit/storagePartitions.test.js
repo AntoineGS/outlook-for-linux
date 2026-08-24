@@ -53,7 +53,7 @@ after(() => {
   delete require.cache[electronPath];
 });
 
-const LEGACY = "persist:teams-4-linux";
+const LEGACY = "persist:outlook-4-linux";
 
 describe("collectPartitionsToClear", () => {
   test("returns just the startup partition when there are no profiles", () => {
@@ -70,15 +70,15 @@ describe("collectPartitionsToClear", () => {
   test("includes every profile partition alongside the startup one", () => {
     const partitions = collectPartitionsToClear(LEGACY, {
       list: () => [
-        { id: "a", partition: "persist:teams-profile-aaa" },
-        { id: "b", partition: "persist:teams-profile-bbb" },
+        { id: "a", partition: "persist:outlook-profile-aaa" },
+        { id: "b", partition: "persist:outlook-profile-bbb" },
       ],
     });
 
     assert.deepStrictEqual(partitions, [
       LEGACY,
-      "persist:teams-profile-aaa",
-      "persist:teams-profile-bbb",
+      "persist:outlook-profile-aaa",
+      "persist:outlook-profile-bbb",
     ]);
   });
 
@@ -88,11 +88,11 @@ describe("collectPartitionsToClear", () => {
     const partitions = collectPartitionsToClear(LEGACY, {
       list: () => [
         { id: "zero", partition: LEGACY },
-        { id: "b", partition: "persist:teams-profile-bbb" },
+        { id: "b", partition: "persist:outlook-profile-bbb" },
       ],
     });
 
-    assert.deepStrictEqual(partitions, [LEGACY, "persist:teams-profile-bbb"]);
+    assert.deepStrictEqual(partitions, [LEGACY, "persist:outlook-profile-bbb"]);
     assert.strictEqual(partitions.filter((p) => p === LEGACY).length, 1);
   });
 
@@ -122,18 +122,18 @@ describe("collectPartitionsToClear", () => {
   // Profiles outlive it, and their partitions still hold tenant cookies.
   test("clears stored profile partitions regardless of the multiAccount flag", () => {
     const partitions = collectPartitionsToClear(LEGACY, {
-      list: () => [{ id: "a", partition: "persist:teams-profile-aaa" }],
+      list: () => [{ id: "a", partition: "persist:outlook-profile-aaa" }],
     });
 
-    assert.ok(partitions.includes("persist:teams-profile-aaa"));
+    assert.ok(partitions.includes("persist:outlook-profile-aaa"));
   });
 
   test("still clears profile partitions when the startup partition is unset", () => {
     const partitions = collectPartitionsToClear(undefined, {
-      list: () => [{ id: "a", partition: "persist:teams-profile-aaa" }],
+      list: () => [{ id: "a", partition: "persist:outlook-profile-aaa" }],
     });
 
-    assert.deepStrictEqual(partitions, ["persist:teams-profile-aaa"]);
+    assert.deepStrictEqual(partitions, ["persist:outlook-profile-aaa"]);
   });
 });
 
@@ -147,18 +147,18 @@ describe("clearStorageForPartitions", () => {
   test("clears every partition it is given, passing the options through", async () => {
     const options = { storages: ["cookies"] };
     const result = await clearStorageForPartitions(
-      [LEGACY, "persist:teams-profile-aaa"],
+      [LEGACY, "persist:outlook-profile-aaa"],
       options,
       "on quit"
     );
 
     assert.deepStrictEqual(fromPartitionCalls, [
       LEGACY,
-      "persist:teams-profile-aaa",
+      "persist:outlook-profile-aaa",
     ]);
     assert.deepStrictEqual(sessions.get(LEGACY).cleared, [[options]]);
     assert.deepStrictEqual(
-      sessions.get("persist:teams-profile-aaa").cleared,
+      sessions.get("persist:outlook-profile-aaa").cleared,
       [[options]]
     );
     assert.deepStrictEqual(result, { total: 2, failed: 0 });

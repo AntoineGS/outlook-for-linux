@@ -5,6 +5,7 @@ const assert = require('node:assert');
 
 const electronPath = require.resolve('electron');
 const profilesManagerPath = require.resolve('../../app/profilesManager');
+const product = require('../../app/product');
 
 // ProfilesManager pulls `ipcMain` from electron at module scope; stub it so
 // the pin-cap logic is testable under plain `node --test` (same pattern as
@@ -89,5 +90,23 @@ describe('ProfilesManager pin cap', () => {
     assert.throws(() => pm.update(sixth, { pinned: true }), /at most 5/i);
     assert.strictEqual(pm.update(ids[0], { pinned: false }).pinned, false);
     assert.strictEqual(pm.update(sixth, { pinned: true }).pinned, true);
+  });
+});
+
+describe('ProfilesManager Outlook legacy bootstrap', () => {
+  it('maps the existing Outlook partition to Profile 0', () => {
+    const pm = new ProfilesManager(makeStore());
+    const profile = pm.bootstrapLegacyProfile('Existing Outlook');
+
+    assert.equal(profile.partition, product.partition);
+    assert.equal(profile.partition, 'persist:outlook-4-linux');
+  });
+
+  it('uses an Outlook partition for new profiles', () => {
+    const pm = new ProfilesManager(makeStore());
+    const profile = pm.add({ name: 'Second account' });
+
+    assert.match(profile.partition, /^persist:outlook-profile-/);
+    assert.doesNotMatch(profile.partition, /teams/i);
   });
 });

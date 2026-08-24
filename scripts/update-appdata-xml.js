@@ -18,7 +18,7 @@ const path = require('node:path');
 const xml2js = require('xml2js');
 
 const ROOT = path.join(__dirname, '..');
-const APPDATA_PATH = path.join(ROOT, 'com.github.IsmaelMartinez.teams_for_linux.appdata.xml');
+const APPDATA_PATH = path.join(ROOT, 'io.github.AntoineGS.outlook_for_linux.appdata.xml');
 const CHANGELOG_PATH = path.join(ROOT, 'CHANGELOG.md');
 const PACKAGE_PATH = path.join(ROOT, 'package.json');
 

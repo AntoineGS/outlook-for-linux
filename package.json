@@ -6,8 +6,10 @@
   "description": "Unofficial client for Microsoft Outlook for Linux",
   "homepage": "https://github.com/AntoineGS/outlook-for-linux",
   "keywords": [
-    "Teams",
-    "Microsoft Teams"
+    "Outlook",
+    "email",
+    "calendar",
+    "productivity"
   ],
   "repository": {
     "type": "git",
@@ -140,6 +142,17 @@
         "--rpm-rpmbuild-define=_build_id_links  none",
         "--rpm-digest=sha256",
         "--rpm-tag=Recommends: fido2-tools"
+      ]
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "libxss",
+        "alsa-lib",
+        "at-spi2-core",
+        "libnotify",
+        "xdg-utils"
       ]
     },
     "deb": {

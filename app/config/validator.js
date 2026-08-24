@@ -19,6 +19,9 @@ const OUTLOOK_IGNORED_OPTIONS = new Set([
   "media",
   "mqtt",
   "quickChat",
+  "incomingCallCommandArgs",
+  "onNewWindowOpenMeetupJoinUrlInApp",
+  "graphApi",
 ]);
 
 function typeName(value) {
@@ -125,14 +128,14 @@ function validateNestedFields(optionName, value, fields, warnings) {
 
 // Returns warning strings (empty when clean or input is unusable).
 // Warn-only: never throws, never exits.
-function validateConfigFile(configFile, optionDefinitions) {
+function validateConfigFile(configFile, optionDefinitions, runtimeProduct = null) {
   const warnings = [];
 
   if (!isPlainObject(configFile) || !isPlainObject(optionDefinitions)) {
     return warnings;
   }
 
-  const isOutlookConfig = optionDefinitions.appTitle?.default === "Microsoft Outlook";
+  const isOutlookConfig = runtimeProduct?.id === "outlook-for-linux";
 
   try {
     for (const [key, value] of Object.entries(configFile)) {

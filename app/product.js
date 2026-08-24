@@ -30,6 +30,7 @@ module.exports = Object.freeze({
   protocol: "msoutlook",
   defaultUrl: "https://outlook.office.com/",
   partition: "persist:outlook-4-linux",
+  profilePartitionPrefix: "persist:outlook-profile-",
   settingsFile: "outlook_settings.json",
   settingsChannels: Object.freeze({
     get: "get-outlook-settings",

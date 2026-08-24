@@ -1,7 +1,8 @@
 const { WebContentsView, session, ipcMain } = require("electron");
 const path = require("node:path");
+const product = require("../product");
 
-const LEGACY_PARTITION = "persist:teams-4-linux";
+const LEGACY_PARTITION = product.partition;
 
 // The switcher renders as a small avatar pill anchored in the BOTTOM-LEFT
 // corner (Teams' left rail is empty there, so nothing is covered — unlike the
@@ -19,14 +20,11 @@ const SWITCHER_PILL_SIZE = 56;
 // deliberately exclude `login.microsoftonline.com` and other pre-auth
 // URLs so navigating to the login page (which sets its own cookies on
 // the partition) does not falsely trigger bootstrap.
-const TEAMS_HOST_RE =
-  /(^|\.)teams\.(microsoft\.com|live\.com|cloud\.microsoft)$/;
-
-function isTeamsNavigationUrl(url) {
+function isProductNavigationUrl(url) {
   if (!url || typeof url !== "string") return false;
   try {
     const { protocol, hostname } = new URL(url);
-    return protocol === "https:" && TEAMS_HOST_RE.test(hostname);
+    return protocol === "https:" && product.isAppHost(hostname);
   } catch {
     return false;
   }
@@ -165,7 +163,7 @@ class ProfileViewManager {
     // `bootstrapProfileZeroIfNeeded` short-circuits on its guard and
     // the cookie read is skipped.
     this.#navigationHandler = (_event, url) => {
-      if (!isTeamsNavigationUrl(url)) return;
+      if (!isProductNavigationUrl(url)) return;
       this.bootstrapProfileZeroIfNeeded().catch((error) => {
         console.warn(
           "[ProfileViewManager] Bootstrap-on-navigate failed",

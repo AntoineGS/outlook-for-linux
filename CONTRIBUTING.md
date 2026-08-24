@@ -1,4 +1,4 @@
-# Contributing to Teams for Linux
+# Contributing to Outlook for Linux
 
 Thank you for considering contributing! This guide will help you get started with development.
 
@@ -32,7 +32,7 @@ You can test PR changes without building from source by downloading pre-built ar
 
 **Note:** You need to be logged into GitHub to download artifacts. Artifacts are retained for 30 days.
 
-See the [full guide](https://ismaelmartinez.github.io/teams-for-linux/development/contributing#testing-pull-requests) for more details.
+See the [upstream full guide](https://ismaelmartinez.github.io/teams-for-linux/development/contributing#testing-pull-requests) for more details about the inherited Electron architecture.
 
 ## Development Setup
 
@@ -40,8 +40,8 @@ See the [full guide](https://ismaelmartinez.github.io/teams-for-linux/developmen
 
 ```bash
 # Clone and setup
-git clone https://github.com/your-username/teams-for-linux.git
-cd teams-for-linux
+git clone https://github.com/your-username/outlook-for-linux.git
+cd outlook-for-linux
 npm install
 
 # Run from source
@@ -54,7 +54,7 @@ npm run lint
 npm run test:e2e
 ```
 
-For detailed setup, building, testing, and code standards, see the [**Full Contributing Guide**](https://ismaelmartinez.github.io/teams-for-linux/development/contributing).
+For detailed setup, building, testing, and code standards, see the [upstream contributing guide](https://ismaelmartinez.github.io/teams-for-linux/development/contributing), which documents the inherited project architecture. Keep Outlook-specific changes in this repository.
 
 ## Additional Resources
 

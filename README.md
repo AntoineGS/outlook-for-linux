@@ -1,95 +1,42 @@
-# Teams for Linux
+# Outlook for Linux
 
-[![Matrix Space](https://img.shields.io/matrix/teams-for-linux-space%3Amatrix.org?server_fqdn=matrix.org&label=Matrix%20Space)](https://matrix.to/#/#teams-for-linux-space:matrix.org "Matrix Space")
-![](https://img.shields.io/github/release/IsmaelMartinez/teams-for-linux.svg?style=flat)
-![](https://img.shields.io/github/downloads/IsmaelMartinez/teams-for-linux/total.svg?style=flat)
-![Build & Release](https://github.com/IsmaelMartinez/teams-for-linux/workflows/Build%20&%20Release/badge.svg)
-![](https://img.shields.io/librariesio/github/IsmaelMartinez/teams-for-linux)
-[![Known Vulnerabilities](https://snyk.io//test/github/IsmaelMartinez/teams-for-linux/badge.svg?targetFile=package.json)](https://snyk.io//test/github/IsmaelMartinez/teams-for-linux?targetFile=package.json)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=IsmaelMartinez_teams-for-linux&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=IsmaelMartinez_teams-for-linux)
-
-**Unofficial Microsoft Teams client for Linux** — a native desktop app that wraps the Teams web version with enhanced Linux integration.
-
-✅ **System notifications**  
-✅ **System tray integration** (badge support varies by desktop environment)  
-✅ **Custom backgrounds & themes**  
-✅ **Screen sharing support**  
-✅ **Multiple account profiles**  
+**Unofficial Microsoft Outlook client for Linux** — a native Electron wrapper around the Outlook web app.
 
 > [!NOTE]
-> This is an independent project, not affiliated with Microsoft. Some features are limited by the Teams web app.
+> This is an independent project, not affiliated with Microsoft. Features are limited by the Outlook web app.
 
-## Sponsor
+This fork is based on [Teams for Linux](https://github.com/IsmaelMartinez/teams-for-linux), whose Electron wrapper and project history are credited here. The application connects to [Microsoft Outlook](https://outlook.office.com/), which remains Microsoft's property and service.
 
-### Recall.ai — API for Meeting Recording and Transcription
-> If you're looking for a meeting recording API, consider checking out [Recall.ai](https://www.recall.ai/product/microsoft-teams-recording-api?utm_source=github&utm_medium=sponsorship&utm_campaign=ismaelmartinez-teams-for-linux), an API that records and transcribes Zoom, Google Meet, Microsoft Teams, in-person meetings, and more.
+Releases are not yet published. Build the application from source for now.
 
-_This sponsorship helps support the ongoing development of teams-for-linux._
+## Run From Source
 
-## Installation
+```bash
+npm install
+npm start
+```
 
-### Package Repositories
+The application reads user configuration from `~/.config/outlook-for-linux/config.json` and system configuration from `/etc/outlook-for-linux/config.json`. Its Electron profile data is stored in the platform-specific Electron `userData` directory, and settings are kept in `outlook_settings.json` there.
 
-We have dedicated Debian/DEB and RHEL/Fedora/RPM repositories at https://teamsforlinux.de hosted with :heart: by [Nils Büchner](https://github.com/nbuechner). Please follow the installation instructions there.
+## Contributing
 
-### Distribution Packages
-
-[![AUR: teams-for-linux](https://img.shields.io/badge/AUR-teams--for--linux-blue.svg)](https://aur.archlinux.org/packages/teams-for-linux)
-[![Pacstall: teams-for-linux-deb](https://img.shields.io/badge/Pacstall-teams--for--linux--deb-00958C)](https://github.com/pacstall/pacstall-programs/tree/master/packages/teams-for-linux-deb)
-[![Vylen Linux: teams-for-linux](https://img.shields.io/badge/Vylen_Linux-teams--for--linux-green)](https://vylen.gitlab.io/packages/#teams-for-linux)  
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/teams-for-linux)
-<a href='https://flathub.org/apps/details/com.github.IsmaelMartinez.teams_for_linux'><img width='170' alt='Download on Flathub' src='https://flathub.org/assets/badges/flathub-badge-en.png'/></a>
-
-### Manual Download
-
-Download from [GitHub Releases](https://github.com/IsmaelMartinez/teams-for-linux/releases) — available as AppImage, deb, rpm, snap, tar.gz (plus Windows/macOS builds).
-
-> [!TIP]
-> For AppImage files, use [`AppImageLauncher`](https://github.com/TheAssassin/AppImageLauncher) for better desktop integration.
-
-## Quick Start
-
-1. **Install** using your preferred method above
-2. **Launch** with `teams-for-linux` 
-3. **Configure** by creating `~/.config/teams-for-linux/config.json` if needed
-
-## Documentation
-
-📖 **[Complete Documentation](https://ismaelmartinez.github.io/teams-for-linux/)** — Enhanced documentation with search, mobile optimization, and comprehensive guides
-
-| Topic | Description |
-|-------|-------------|
-| **[Installation Guide](https://ismaelmartinez.github.io/teams-for-linux/installation)** | Package repositories and installation methods |
-| **[Configuration Guide](https://ismaelmartinez.github.io/teams-for-linux/configuration)** | Complete setup and configuration options |
-| **[Troubleshooting](https://ismaelmartinez.github.io/teams-for-linux/troubleshooting)** | Common issues and solutions |
-| **[Multiple Profiles](https://ismaelmartinez.github.io/teams-for-linux/multiple-instances)** | Running work & personal accounts |
-| **[Custom Backgrounds](https://ismaelmartinez.github.io/teams-for-linux/custom-backgrounds)** | Video call backgrounds setup |
-| **[Contributing](https://ismaelmartinez.github.io/teams-for-linux/contributing)** | Development setup and contribution guidelines |
-| **[Privacy & Data Protection](https://ismaelmartinez.github.io/teams-for-linux/privacy)** | What personal data the app does and does not handle |
-
-## Project Activity
-
-![Alt](https://repobeats.axiom.co/api/embed/e63dcc8b154ee5f4490674818df091c243b041b7.svg "Repobeats analytics image")
-
-## Support & Community
-
-- 💬 **Chat**: Join our [Matrix Space](https://matrix.to/#/#teams-for-linux-space:matrix.org)
-- 🐛 **Issues**: [Report bugs](https://github.com/IsmaelMartinez/teams-for-linux/issues)
-- 🤝 **Contributing**: See [`CONTRIBUTING.md`](CONTRIBUTING.md)
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for source setup, tests, and pull request guidance. Please report Outlook-specific issues in this repository with reproducible steps.
 
 ## Security & Sandboxing
 
-Electron's contextIsolation and sandbox features are disabled to enable Teams DOM access functionality. For enhanced security, use system-level sandboxing:
+Electron's contextIsolation and sandbox features are disabled to support Outlook web-app integration. For enhanced security, use system-level sandboxing:
 
 **Available options**:
-- **Flatpak**: Built-in isolation via Flathub
-- **Snap packages**: Application confinement with auto-updates
-- **Firejail**: Use this [script](https://codeberg.org/lars_uffmann/teams-for-linux-jailed) for manual sandboxing
+- **Flatpak**: Built-in isolation when a package becomes available
+- **Snap packages**: Application confinement when a package becomes available
 - **AppArmor/SELinux**: Most Linux distributions include these by default
 
 System-level sandboxing provides better isolation than Electron's built-in features while preserving full functionality.
 
-## Advanced Usage
+## Configuration
+
+Use `~/.config/outlook-for-linux/config.json` for supported settings. Unsupported
+legacy Teams settings are ignored with value-safe startup warnings.
 
 ## History
 
