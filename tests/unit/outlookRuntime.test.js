@@ -79,13 +79,10 @@ describe('Outlook runtime boundary', () => {
   it('uses the same audited Outlook 256px asset at runtime and in builds', () => {
     const runtimeIcon = join(ROOT, 'app', 'assets', 'icons', 'icon-256x256.png');
     const buildIcon = join(ROOT, 'build', 'icons', '256x256.png');
-    assert.equal(sha256(readFileSync(runtimeIcon)), sha256(readFileSync(buildIcon)));
-    assert.notEqual(
-      sha256(readFileSync(runtimeIcon)),
-      sha256(require('node:child_process').execFileSync('git', [
-        'show', 'HEAD^:app/assets/icons/icon-256x256.png',
-      ])),
-    );
+    const auditedOutlook256Hash =
+      '7630c5b7190ae63cb2a7d8d4abab6011684b4a982f31a209610a694148233b58';
+    assert.equal(sha256(readFileSync(runtimeIcon)), auditedOutlook256Hash);
+    assert.equal(sha256(readFileSync(buildIcon)), auditedOutlook256Hash);
   });
 
   it('does not expose Teams-only menu entries', () => {
