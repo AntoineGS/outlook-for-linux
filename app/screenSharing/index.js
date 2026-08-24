@@ -1,5 +1,6 @@
 const { ipcMain, WebContentsView } = require("electron");
 const path = require("node:path");
+const { registerFeatureIpc } = require("../security/featureIpc");
 
 class StreamSelector {
   #parent;
@@ -59,9 +60,9 @@ class StreamSelector {
 
     this.#parent.on("resize", this.#resizeHandler);
     // Receive user's screen sharing source selection from picker UI
-    ipcMain.once("selected-source", this.#sourceHandler);
+    registerFeatureIpc(true, "once", "selected-source", this.#sourceHandler);
     // Close the stream selector view without selection
-    ipcMain.once("close-view", this.#closeHandler);
+    registerFeatureIpc(true, "once", "close-view", this.#closeHandler);
   }
 
   #resizeView() {

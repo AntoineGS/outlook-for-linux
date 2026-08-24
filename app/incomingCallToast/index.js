@@ -1,6 +1,7 @@
 const { BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const { moveWindow } = require('../utils/windowPositioner');
+const { registerFeatureIpc } = require('../security/featureIpc');
 
 class IncomingCallToast {
 
@@ -24,7 +25,7 @@ class IncomingCallToast {
         });
         this.toast.loadFile(path.join(__dirname, 'incomingCallToast.html'));
         // Handle incoming call actions (accept/decline)
-        ipcMain.on('incoming-call-action', (event, action) => {
+        registerFeatureIpc(true, 'on', 'incoming-call-action', (event, action) => {
             this.hide();
             if (actionListener && typeof actionListener == 'function') {
                 actionListener(action);
@@ -34,7 +35,7 @@ class IncomingCallToast {
 
     show(data) {
         // Signal from toast window that it's ready to be displayed
-        ipcMain.once('incoming-call-toast-ready', () => {
+        registerFeatureIpc(true, 'once', 'incoming-call-toast-ready', () => {
             moveWindow(this.toast, 'bottomRight');
             this.toast.show();
         });

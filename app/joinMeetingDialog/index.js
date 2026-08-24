@@ -1,6 +1,7 @@
 const { ipcMain } = require('electron');
 const path = require('node:path');
 const createDialogWindow = require('../_shared/createDialogWindow');
+const { registerFeatureIpc } = require('../security/featureIpc');
 
 // Only one JoinMeetingDialog instance exists; its handlers dispatch via this
 // pointer so listeners are registered once and survive across dialog opens.
@@ -11,11 +12,11 @@ function ensureIpcHandlers() {
   if (handlersRegistered) return;
   handlersRegistered = true;
   // Handle join meeting dialog submission
-  ipcMain.on('join-meeting-submit', (_event, url) => {
+  registerFeatureIpc(true, 'on', 'join-meeting-submit', (_event, url) => {
     activeHandlers?.onSubmit(url);
   });
   // Handle join meeting dialog cancel
-  ipcMain.on('join-meeting-cancel', () => {
+  registerFeatureIpc(true, 'on', 'join-meeting-cancel', () => {
     activeHandlers?.onCancel();
   });
 }

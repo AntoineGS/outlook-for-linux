@@ -1,6 +1,7 @@
 // Microsoft Graph API IPC Handlers
 
 const logger = require('electron-log');
+const { registerFeatureIpc } = require('../security/featureIpc');
 
 /**
  * Register all Graph API IPC handlers
@@ -11,7 +12,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   const notEnabled = { success: false, error: 'Graph API not enabled' };
 
   // Get current user profile from Microsoft Graph API
-  ipcMain.handle('graph-api-get-user-profile', async () => {
+  registerFeatureIpc(true, 'handle', 'graph-api-get-user-profile', async () => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.getUserProfile();
@@ -22,7 +23,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Get calendar events with optional OData query options
-  ipcMain.handle('graph-api-get-calendar-events', async (_event, options) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-get-calendar-events', async (_event, options) => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.getCalendarEvents(options);
@@ -33,7 +34,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Get calendar view for a specific time range
-  ipcMain.handle('graph-api-get-calendar-view', async (_event, startDateTime, endDateTime, options) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-get-calendar-view', async (_event, startDateTime, endDateTime, options) => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.getCalendarView(startDateTime, endDateTime, options);
@@ -44,7 +45,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Create a new calendar event
-  ipcMain.handle('graph-api-create-calendar-event', async (_event, event) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-create-calendar-event', async (_event, event) => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.createCalendarEvent(event);
@@ -55,7 +56,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Get mail messages with optional OData query options
-  ipcMain.handle('graph-api-get-mail-messages', async (_event, options) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-get-mail-messages', async (_event, options) => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.getMailMessages(options);
@@ -66,7 +67,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Search people using People API (for Quick Chat feature)
-  ipcMain.handle('graph-api-search-people', async (_event, query, options) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-search-people', async (_event, query, options) => {
     if (!graphApiClient) return notEnabled;
     try {
       return await graphApiClient.searchPeople(query, options);
@@ -77,7 +78,7 @@ function registerGraphApiHandlers(ipcMain, graphApiClient) {
   });
 
   // Send a chat message to a user via Graph API
-  ipcMain.handle('graph-api-send-chat-message', async (_event, contactInfo, content) => {
+  registerFeatureIpc(true, 'handle', 'graph-api-send-chat-message', async (_event, contactInfo, content) => {
     if (!graphApiClient) return notEnabled;
     if (!contactInfo || typeof contactInfo.userId !== 'string' || !contactInfo.userId.trim()) {
       return { success: false, error: 'Invalid contact info: userId required' };

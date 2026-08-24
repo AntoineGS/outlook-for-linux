@@ -24,8 +24,8 @@ function collectSourceFiles(dir) {
 // Both regexes are linear-time: no nested quantifiers. Matching runs on
 // whole-file content, not per line — browserWindowManager.js registers
 // channels with the literal on the line after `ipcMain.handle(`.
-const IPC_REGISTRATION = /ipcMain\.(handle|on|once)\(/g;
 const IPC_CHANNEL_LITERAL = /ipcMain\.(handle|on|once)\(\s*["']([^"']+)["']/g;
+const IPC_CHANNEL_ARGUMENT = /ipcMain\.(handle|on|once)\(\s*([^,\n]+)/g;
 
 describe('IPC Validator - Channel validation', () => {
 	it('accepts all channels in the allowlist', () => {
@@ -134,15 +134,20 @@ describe('IPC Validator - Allowlist completeness', () => {
 	// default (#2821).
 	it('allowlists every channel registered under app/', () => {
 		const offenders = [];
-		let registrationCount = 0;
 		let literalCount = 0;
+		const nonLiteralRegistrations = [];
 		for (const file of collectSourceFiles(APP_DIR)) {
 			const source = readFileSync(file, 'utf8');
-			registrationCount += (source.match(IPC_REGISTRATION) || []).length;
 			for (const match of source.matchAll(IPC_CHANNEL_LITERAL)) {
 				literalCount++;
 				if (!allowedChannels.has(match[2])) {
 					offenders.push(`${path.relative(APP_DIR, file)}:${match[2]}`);
+				}
+			}
+			for (const match of source.matchAll(IPC_CHANNEL_ARGUMENT)) {
+				const argument = match[2].trim();
+				if (!/^['"]/.test(argument)) {
+					nonLiteralRegistrations.push(`${path.relative(APP_DIR, file)}:${argument}`);
 				}
 			}
 		}
@@ -151,10 +156,43 @@ describe('IPC Validator - Allowlist completeness', () => {
 			[],
 			`Every registered IPC channel must be in app/security/ipcValidator.js's allowlist. Missing:\n  ${offenders.join('\n  ')}`
 		);
-		assert.strictEqual(
-			registrationCount,
-			literalCount,
-			'An ipcMain.handle/on/once registration does not pass its channel as a string literal, so this scanner cannot verify it against the allowlist. A human must check the channel is allowlisted consciously (or make it a literal).'
+		assert.ok(literalCount > 0, 'Expected at least one literal IPC registration to scan');
+		assert.deepStrictEqual(
+			nonLiteralRegistrations.sort(),
+			[
+				'menus/index.js:product.settingsChannels.get',
+				'menus/index.js:product.settingsChannels.set',
+			],
+			'Only product.settingsChannels expressions may be used for nonliteral IPC registrations',
 		);
 	});
+});
+
+describe('IPC Validator - Outlook channel boundary', () => {
+	for (const channel of ['get-outlook-settings', 'set-outlook-settings']) {
+		it(`accepts ${channel}`, () => {
+			assert.equal(validateIpcChannel(channel), true);
+		});
+	}
+
+	for (const channel of [
+		'user-status-changed',
+		'call-connected',
+		'call-disconnected',
+		'incoming-call-created',
+		'incoming-call-ended',
+		'screen-sharing-started',
+		'screen-sharing-stopped',
+		'get-teams-settings',
+		'set-teams-settings',
+		'get-custom-bg-list',
+		'get-sticker-list',
+		'graph-api-get-user-profile',
+		'quick-chat:show',
+		'join-meeting-submit',
+	]) {
+		it(`rejects Teams-only channel ${channel}`, () => {
+			assert.equal(validateIpcChannel(channel), false);
+		});
+	}
 });

@@ -5,23 +5,18 @@ const assert = require('node:assert');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
-// Regression guard for issue #1902 and the CLAUDE.md "Modules Requiring IPC
-// Initialization" rule. The `modulesRequiringIpc` Set in
-// `app/browser/preload.js` controls which browser-side modules receive
-// `ipcRenderer` during `init`. Dropping `trayIconRenderer` or
-// `mqttStatusMonitor` from this Set is a silent regression --- the modules
-// load fine, then crash later inside their handlers with
-// `TypeError: Cannot read properties of undefined (reading 'send')`.
-// CLAUDE.md notes the fix has been "accidentally removed multiple times
-// in git history".
+// Regression guard for the Outlook preload boundary. The
+// `modulesRequiringIpc` Set controls which generic browser-side modules receive
+// `ipcRenderer` during `init`; keeping the Outlook settings and WebAuthn
+// overrides in this set avoids silently dropping their IPC functionality.
 //
 // `preload.js` is an Electron preload script that can't be `require`d in
 // a plain Node test without stubbing the `electron` runtime. Parsing it
 // as text keeps the test fast, deterministic, and free of mocks --- the
-// Set declaration is a stable invariant the rule depends on.
+// Set declaration is a stable invariant the Outlook runtime depends on.
 
 const PRELOAD_PATH = join(__dirname, '..', '..', 'app', 'browser', 'preload.js');
-const REQUIRED_MODULES = ['settings', 'theme', 'trayIconRenderer', 'mqttStatusMonitor', 'meetingStartDetector', 'webauthnOverride'];
+const REQUIRED_MODULES = ['settings', 'webauthnOverride'];
 
 describe('preload.js modulesRequiringIpc Set', () => {
 	const source = readFileSync(PRELOAD_PATH, 'utf8');

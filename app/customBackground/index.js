@@ -1,5 +1,6 @@
 const httpHelper = require("../helpers");
 const { ipcMain } = require("electron");
+const { registerFeatureIpc } = require("../security/featureIpc");
 const path = require("node:path");
 const fs = require("node:fs");
 
@@ -14,7 +15,7 @@ class CustomBackground {
     this.config = config;
     if (this.isCustomBackgroundEnabled()) {
       // Get list of custom background images for Teams meetings
-      ipcMain.handle("get-custom-bg-list", this.handleGetCustomBGList);
+      registerFeatureIpc(true, "handle", "get-custom-bg-list", this.handleGetCustomBGList);
     }
   }
 

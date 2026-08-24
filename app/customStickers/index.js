@@ -1,4 +1,5 @@
 const { ipcMain } = require("electron");
+const { registerFeatureIpc } = require("../security/featureIpc");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -45,13 +46,13 @@ class CustomStickers {
     // Each entry includes a base64 data URL so the renderer can show thumbnails
     // and rebuild a File for synthetic-paste insertion without needing direct
     // filesystem access.
-    ipcMain.handle("get-sticker-list", () => this.handleGetStickerList());
+    registerFeatureIpc(true, "handle", "get-sticker-list", () => this.handleGetStickerList());
 
     // Download an HTTPS URL into the sticker folder. Validates the URL is
     // HTTPS, the response content-type is on the allowlist, and the byte
     // length is under the configured cap. Returns `{ success, filename }`
     // on success or `{ success: false, error }` on failure.
-    ipcMain.handle("import-sticker-url", (_event, rawUrl) =>
+    registerFeatureIpc(true, "handle", "import-sticker-url", (_event, rawUrl) =>
       this.handleImportStickerUrl(rawUrl),
     );
 
@@ -59,7 +60,7 @@ class CustomStickers {
     // name/subfolder do not contain path-traversal components and resolves
     // strictly inside the sticker folder before unlinking. Returns
     // `{ success }` on success or `{ success: false, error }` on failure.
-    ipcMain.handle("delete-sticker", (_event, payload) =>
+    registerFeatureIpc(true, "handle", "delete-sticker", (_event, payload) =>
       this.handleDeleteSticker(payload),
     );
   }

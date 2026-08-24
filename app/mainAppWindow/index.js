@@ -25,6 +25,7 @@ const path = require("node:path");
 const product = require("../product");
 const { isApprovedRendererSource } = require("./authRecoverySource");
 const { resolveLaunchUrl } = require("../urlHandling");
+const { registerFeatureIpc } = require("../security/featureIpc");
 
 const DEFAULT_SCREEN_SHARING_THUMBNAIL_CONFIG = {
   enabled: true,
@@ -61,6 +62,7 @@ function setupScreenSharing(selectedSource) {
 // fires only for the session it is bound to, so multi-account profile views (running against
 // their own partition session) need their own binding. See #2529.
 function bindDisplayMediaHandler(targetSession) {
+  if (!product.features.screenSharing) return;
   targetSession.setDisplayMediaRequestHandler((_request, callback) => {
     streamSelector.show((source) => {
       if (source) {
@@ -701,7 +703,9 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
   });
 
   window = await browserWindowManager.createWindow();
-  streamSelector = new StreamSelector(window);
+  if (product.features.screenSharing) {
+    streamSelector = new StreamSelector(window);
+  }
 
   // Restrict WebRTC ICE candidate gathering to the interface with the default
   // route, preventing secondary interfaces (e.g. an ethernet adapter with no
@@ -712,7 +716,9 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
     window.webContents.setWebRTCIPHandlingPolicy(config.network.webRTCIPHandlingPolicy);
   }
 
-  bindDisplayMediaHandler(window.webContents.session);
+  if (product.features.screenSharing) {
+    bindDisplayMediaHandler(window.webContents.session);
+  }
 
   // #2534: the Teams-side script pumps VideoFrames from the active
   // screen-share track through a MessagePort; the preview window reconstructs
@@ -728,7 +734,7 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
   // Teams renderer to it with a direct MessagePort so a single capture
   // feeds both windows (#2534). One of several listeners on this broadcast
   // channel; see the rationale above.
-  ipcMain.on("screen-sharing-started", () => {
+  if (product.features.screenSharing) registerFeatureIpc(true, "on", "screen-sharing-started", () => {
     if (!window || window.isDestroyed()) return;
     createScreenSharePreviewWindow();
     const previewWindow = screenSharingService.getPreviewWindow();
@@ -781,11 +787,11 @@ exports.onAppReady = async function onAppReady(configGroup, customBackground, sh
   // detect this, clear stale auth state, and reload to force a clean
   // interactive login. Detection itself lives in maybeScheduleAuthRecovery
   // so the forwarded window-error path can reuse it.
-  app.on('teams-call-connected', () => {
+  if (product.features.calls) app.on('teams-call-connected', () => {
     callActive = true;
     resetMidCallAuthState();
   });
-  app.on('teams-call-disconnected', () => {
+  if (product.features.calls) app.on('teams-call-disconnected', () => {
     callActive = false;
     resetMidCallAuthState();
     if (recoveryQueuedForCallEnd) {
@@ -944,7 +950,9 @@ function onDidFinishLoad() {
 			tryAgainLink && tryAgainLink.click()
 		`).catch(() => {});
 
-  injectScreenSharingLogic();
+  if (product.features.screenSharing) {
+    injectScreenSharingLogic();
+  }
 
   customCSS.onDidFinishLoad(window.webContents, config);
   initSystemThemeFollow(config);
@@ -1064,8 +1072,7 @@ function onBeforeRequestHandler(details, callback) {
     return;
   }
 
-  const customBackgroundRedirect =
-    customBackgroundService.beforeRequestHandlerRedirectUrl(details);
+  const customBackgroundRedirect = customBackgroundService?.beforeRequestHandlerRedirectUrl(details);
 
   if (customBackgroundRedirect) {
     callback(customBackgroundRedirect);
@@ -1160,7 +1167,7 @@ function stripCspForAuthPages(responseHeaders, url) {
 }
 
 function onHeadersReceivedHandler(details, callback) {
-  customBackgroundService.onHeadersReceivedHandler(details);
+  customBackgroundService?.onHeadersReceivedHandler(details);
 
   stripCspForAuthPages(details.responseHeaders, details.url);
 
@@ -1173,7 +1180,7 @@ function onBeforeSendHeadersHandler(detail, callback) {
   if (intune?.isSsoUrl(detail.url)) {
     intune.addSsoCookie(detail, callback);
   } else {
-    customBackgroundService.addCustomBackgroundHeaders(detail, callback);
+    customBackgroundService?.addCustomBackgroundHeaders(detail, callback);
 
     callback({
       requestHeaders: detail.requestHeaders,
@@ -1199,7 +1206,7 @@ function onNewWindow(details) {
     console.info('[WINDOW_OPEN] Auth-related popup', { origin });
   }
 
-  if (new RegExp(config.meetupJoinRegEx).test(details.url)) {
+  if (product.features.teamsAutomation && new RegExp(config.meetupJoinRegEx).test(details.url)) {
     if (config.onNewWindowOpenMeetupJoinUrlInApp) {
       window.loadURL(details.url, { userAgent: config.chromeUserAgent });
     }
@@ -1245,7 +1252,9 @@ function onWindowClosed() {
   console.debug("window closed");
 
   // Close preview window before quitting to prevent race conditions
-  const previewWindow = screenSharingService?.getPreviewWindow();
+  const previewWindow = product.features.screenSharing
+    ? screenSharingService?.getPreviewWindow()
+    : null;
   if (previewWindow && !previewWindow.isDestroyed()) {
     console.debug("[SCREEN_SHARE_DIAG] Closing preview window before app quit");
     previewWindow.close();
@@ -1258,7 +1267,7 @@ function onWindowClosed() {
 }
 
 function addEventHandlers() {
-  customBackgroundService.initializeCustomBGServiceURL();
+  customBackgroundService?.initializeCustomBGServiceURL();
 
   // After resuming from sleep, check if auth cookies expired during suspend.
   // Electron on Linux lacks OS-level auth brokers (WAM/Keychain) that browsers
@@ -1306,7 +1315,7 @@ function addEventHandlers() {
 }
 
 function getWebRequestFilterFromURL() {
-  const filter = customBackgroundService.isCustomBackgroundHttpProtocol()
+  const filter = customBackgroundService?.isCustomBackgroundHttpProtocol()
     ? { urls: ["http://*/*"] }
     : { urls: ["https://*/*"] };
   if (intune) {

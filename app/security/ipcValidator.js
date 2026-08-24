@@ -18,66 +18,22 @@ const allowedChannels = new Set([
   'get-zoom-level',
   'save-zoom-level',
   
-  // Screen sharing and desktop capture (sorted alphabetically)
-  'cancel-desktop-media',
-  'choose-desktop-media',
-  'close-view',
-  'desktop-capturer-get-sources',
-  'get-screen-share-screen',
-  'get-screen-share-stream',
-  'get-screen-sharing-displays',
-  'get-screen-sharing-status',
-  'resize-preview-window',
-  // main → renderer only (webContents.postMessage); not gated by this validator,
-  // listed here so the allowlist stays authoritative per CLAUDE.md.
-  'screen-share-port',
-  'screen-sharing-started',
-  'screen-sharing-stopped',
-  'select-source',
-  'selected-source',
-  'source-selected',
-  'stop-screen-sharing-from-thumbnail',
-  
   // Notifications and user interaction
   'play-notification-sound',
   'show-notification',
   'notification-closed',
   'notification-show-toast',
   'notification-toast-click',
-  'user-status-changed',
   'set-badge-count',
   'tray-update',
   'dock-icon-update',
 
-  // Call management (sorted alphabetically)
-  'call-connected',
-  'call-disconnected',
-  'incoming-call-action',
-  'incoming-call-created',
-  'incoming-call-ended',
-  'incoming-call-toast-ready',
-
-  // Media status (camera/microphone)
-  'camera-state-changed',
-  'microphone-state-changed',
-
-  // Scheduled-meeting-start toast detection for MQTT (#2587)
-  'meeting-started',
-  
   // Authentication and forms
   'submitForm',
-  
-  // Settings management
-  'get-teams-settings',
-  'set-teams-settings',
-  
-  // Custom backgrounds
-  'get-custom-bg-list',
 
-  // Custom stickers
-  'get-sticker-list',
-  'import-sticker-url',
-  'delete-sticker',
+  // Settings management
+  'get-outlook-settings',
+  'set-outlook-settings',
   
   // Connection management
   'offline-retry',
@@ -87,23 +43,6 @@ const allowedChannels = new Set([
   'navigate-forward',
   'get-navigation-state',
   'navigation-state-changed',
-
-  // Microsoft Graph API integration
-  'graph-api-get-user-profile',
-  'graph-api-get-calendar-events',
-  'graph-api-get-calendar-view',
-  'graph-api-create-calendar-event',
-  'graph-api-get-mail-messages',
-  'graph-api-search-people',
-  'graph-api-send-chat-message',
-
-  // Join meeting dialog
-  'join-meeting-submit',
-  'join-meeting-cancel',
-
-  // Quick Chat modal
-  'quick-chat:show',
-  'quick-chat:hide',
 
   // Renderer-side error forwarding (registered in app/browser/preload.js)
   'unhandled-rejection',

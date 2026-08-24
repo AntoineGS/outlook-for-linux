@@ -17,6 +17,7 @@ const HomeAssistantDiscovery = require("./mqtt/homeAssistantDiscovery");
 const GraphApiClient = require("./graphApi");
 const { registerGraphApiHandlers } = require("./graphApi/ipcHandlers");
 const { allowedChannels } = require("./security/ipcValidator");
+const { registerFeatureIpc } = require("./security/featureIpc");
 const { installIpcSecurity } = require("./security/ipcSecurity");
 const { sanitize: sanitizePii } = require("./utils/logSanitizer");
 const { register: registerGlobalShortcuts, sendKeyboardEventToWindow } = require("./globalShortcuts");
@@ -136,7 +137,7 @@ const notificationService = new NotificationService(
   getUserStatus
 );
 
-const screenSharingService = new ScreenSharingService();
+const screenSharingService = product.features.screenSharing ? new ScreenSharingService() : null;
 
 const partitionsManager = new PartitionsManager(appConfig.settingsStore);
 
@@ -151,7 +152,7 @@ const profilesManager = new ProfilesManager(appConfig.settingsStore);
 // after `mainAppWindow.onAppReady` resolves.
 let profileViewManager = null;
 
-const idleMonitor = new IdleMonitor(config, getUserStatus);
+const idleMonitor = product.features.presence ? new IdleMonitor(config, getUserStatus) : null;
 
 const customNotificationManager = new CustomNotificationManager(config, mainAppWindow);
 
@@ -226,18 +227,20 @@ if (gotTheLock) {
   });
 
   notificationService.initialize();
-  screenSharingService.initialize();
+  if (screenSharingService) screenSharingService.initialize();
   partitionsManager.initialize();
 
   if (config.multiAccount?.enabled) {
     profilesManager.initialize();
   }
 
-  idleMonitor.initialize();
+  if (idleMonitor) idleMonitor.initialize();
   customNotificationManager.initialize();
 
-  // Handle user status changes from Teams (e.g., Available, Busy, Away)
-  ipcMain.handle("user-status-changed", userStatusChangedHandler);
+  if (product.features.presence) {
+    // Handle user status changes from Teams (e.g., Available, Busy, Away)
+    registerFeatureIpc(true, "handle", "user-status-changed", userStatusChangedHandler);
+  }
   // Set application badge count (dock/taskbar notification)
   ipcMain.handle("set-badge-count", setBadgeCountHandler);
 
@@ -676,17 +679,21 @@ async function handleAppReady() {
 
     initializeCacheManagement();
 
-    if (config.mqtt?.enabled) {
+    if (product.features.teamsAutomation && config.mqtt?.enabled) {
       initializeMqtt();
     }
 
     loadMenuToggleSettings();
 
-    const customBackground = new CustomBackground(app, config);
-    customBackground.initialize();
+    const customBackground = product.features.customBackgrounds
+      ? new CustomBackground(app, config)
+      : null;
+    customBackground?.initialize();
 
-    const customStickers = new CustomStickers(app, config);
-    customStickers.initialize();
+    const customStickers = product.features.customStickers
+      ? new CustomStickers(app, config)
+      : null;
+    customStickers?.initialize();
 
     // Smartcard / NSS client-certificate PIN dialog (Linux only, issue #2639).
     // Registered before the main window loads so the handler exists before the
@@ -731,9 +738,11 @@ async function handleAppReady() {
       await WebAuthn.initialize(mainAppWindow.getWindow(), config);
     }
 
-    initializeGraphApiClient();
-    registerGraphApiHandlers(ipcMain, graphApiClient);
-    initializeQuickChat();
+    if (product.features.teamsAutomation) {
+      initializeGraphApiClient();
+      registerGraphApiHandlers(ipcMain, graphApiClient);
+      initializeQuickChat();
+    }
     registerGlobalShortcuts(config, mainAppWindow, app);
     initializeAutoUpdater();
 

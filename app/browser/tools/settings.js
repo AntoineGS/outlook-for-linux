@@ -1,4 +1,5 @@
 const ReactHandler = require("./reactHandler");
+const product = require("../../product");
 
 let _Settings_config = new WeakMap();
 let _Settings_ipcRenderer = new WeakMap();
@@ -6,8 +7,8 @@ class Settings {
   init(config, ipcRenderer) {
     _Settings_config.set(this, config);
     _Settings_ipcRenderer.set(this, ipcRenderer);
-    this.ipcRenderer.on("get-teams-settings", retrieve);
-    this.ipcRenderer.on("set-teams-settings", restore);
+    this.ipcRenderer.on(product.settingsChannels.get, retrieve);
+    this.ipcRenderer.on(product.settingsChannels.set, restore);
   }
 
   get config() {
@@ -57,7 +58,7 @@ async function retrieve(event) {
     };
     
     if (validateSettingsInput(settings)) {
-      event.sender.send("get-teams-settings", settings);
+      event.sender.send(product.settingsChannels.get, settings);
     } else {
       console.error("Settings: Retrieved invalid settings data");
     }
@@ -98,10 +99,10 @@ async function restore(event, ...args) {
       clientPreferences.density.chatDensity = args[0].chatDensity;
     }
     
-    event.sender.send("set-teams-settings", true);
+    event.sender.send(product.settingsChannels.set, true);
   } catch (error) {
     console.error("Settings: Error restoring settings:", error);
-    event.sender.send("set-teams-settings", false);
+    event.sender.send(product.settingsChannels.set, false);
   }
 }
 

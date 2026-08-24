@@ -1,5 +1,6 @@
 const { ipcMain } = require('electron');
 const QuickChatModal = require('./QuickChatModal');
+const { registerFeatureIpc } = require('../security/featureIpc');
 
 /**
  * Quick Chat Manager
@@ -26,10 +27,10 @@ class QuickChatManager {
     this.#modal = new QuickChatModal(this.#mainWindow);
 
     // Show the Quick Chat modal
-    ipcMain.on('quick-chat:show', () => this.show());
+    registerFeatureIpc(true, 'on', 'quick-chat:show', () => this.show());
 
     // Hide the Quick Chat modal
-    ipcMain.on('quick-chat:hide', () => this.hide());
+    registerFeatureIpc(true, 'on', 'quick-chat:hide', () => this.hide());
 
     console.info('[QuickChat] Initialized');
   }

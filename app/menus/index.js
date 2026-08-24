@@ -25,6 +25,7 @@ const JoinMeetingDialog = require("../joinMeetingDialog");
 const AddProfileDialog = require("../profileDialogs/addProfile");
 const ManageProfileDialog = require("../profileDialogs/manageProfile");
 const autoUpdaterModule = require("../autoUpdater");
+const product = require("../product");
 
 let _Menus_onSpellCheckerLanguageChanged = new WeakMap();
 class Menus {
@@ -359,20 +360,20 @@ class Menus {
 
   saveSettings() {
     // Receive Teams settings from renderer to save to file
-    ipcMain.once("get-teams-settings", saveSettingsInternal);
-    this.window.webContents.send("get-teams-settings");
+    ipcMain.once(product.settingsChannels.get, saveSettingsInternal);
+    this.window.webContents.send(product.settingsChannels.get);
   }
 
   restoreSettings() {
     // Acknowledge settings restoration completion from renderer
-    ipcMain.once("set-teams-settings", restoreSettingsInternal);
+    ipcMain.once(product.settingsChannels.set, restoreSettingsInternal);
     const settingsPath = path.join(
       app.getPath("userData"),
-      "teams_settings.json"
+      product.settingsFile
     );
     if (fs.existsSync(settingsPath)) {
       this.window.webContents.send(
-        "set-teams-settings",
+        product.settingsChannels.set,
         JSON.parse(fs.readFileSync(settingsPath))
       );
     } else {

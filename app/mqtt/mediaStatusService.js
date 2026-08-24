@@ -1,5 +1,6 @@
 const { app, ipcMain } = require('electron');
 const { getMediaTopics } = require('./mediaTopics');
+const { registerFeatureIpc } = require('../security/featureIpc');
 
 /**
  * MQTT Media Status Service
@@ -35,17 +36,17 @@ class MQTTMediaStatusService {
 
 	initialize() {
 		// Publish MQTT status when camera state changes
-		ipcMain.on('camera-state-changed', this.#handleCameraChanged.bind(this));
+		registerFeatureIpc(true, 'on', 'camera-state-changed', this.#handleCameraChanged.bind(this));
 		// Publish MQTT status when microphone state changes
-		ipcMain.on('microphone-state-changed', this.#handleMicrophoneChanged.bind(this));
+		registerFeatureIpc(true, 'on', 'microphone-state-changed', this.#handleMicrophoneChanged.bind(this));
 
 		// Publish an MQTT pulse when the renderer detects a scheduled-meeting-start toast (#2587)
-		ipcMain.on('meeting-started', this.#handleMeetingStarted.bind(this));
+		registerFeatureIpc(true, 'on', 'meeting-started', this.#handleMeetingStarted.bind(this));
 
 		// Publish MQTT status when screen sharing starts
-		ipcMain.on('screen-sharing-started', () => this.#handleScreenSharingChanged(true));
+		registerFeatureIpc(true, 'on', 'screen-sharing-started', () => this.#handleScreenSharingChanged(true));
 		// Publish MQTT status when screen sharing stops
-		ipcMain.on('screen-sharing-stopped', () => this.#handleScreenSharingChanged(false));
+		registerFeatureIpc(true, 'on', 'screen-sharing-stopped', () => this.#handleScreenSharingChanged(false));
 
 		app.on('teams-call-connected', this.#handleCallConnected.bind(this));
 		app.on('teams-call-disconnected', this.#handleCallDisconnected.bind(this));

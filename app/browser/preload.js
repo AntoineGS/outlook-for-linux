@@ -1,18 +1,7 @@
 const { ipcRenderer } = require("electron");
 const product = require("../product");
 
-// #2677: Electron removed the non-standard `File.path` from dropped files, so
-// Teams (which uploads by native path) rejects them as "File is missing data".
-// Restore it via webUtils.getPathForFile before Teams's drop handler reads it,
-// scoped to Outlook hosts so the SSO/auth pages this window also loads can't read
-// local paths off dropped files.
-//
-// The same stripping hits pasted files: when a user copies an image file
-// in their file manager and pastes into the compose box, Chromium surfaces it
-// as a File on the paste event's clipboardData, and Teams uploads by path — so
-// the paste fails the same way drag-drop used to. Restore the path on a
-// capture-phase paste listener too. Raw image-bit paste (screenshots) arrives
-// as a Blob with no path and is unaffected.
+// Restore native file paths for Outlook-hosted drag/drop and paste uploads.
 try {
   const { webUtils } = require("electron");
   // Restore the non-standard `File.path` on every File in a FileList, in place.
@@ -65,47 +54,8 @@ try {
   // webUtils unavailable
 }
 
-// #2534: forward the MessagePort that main posts on 'screen-share-port' into
-// the main world. Using window.postMessage with transfer is the supported way
-// to hand a MessagePort across to the renderer; the port cannot be returned
-// through a contextBridge-exposed function call. Posting to
-// `window.location.origin` (rather than `"*"`) restricts the destination to
-// this document and satisfies SonarCloud's S2819 cross-origin check.
-ipcRenderer.on("screen-share-port", (event) => {
-  if (event.ports?.length) {
-    globalThis.postMessage("screen-share-port", globalThis.location.origin, event.ports);
-  }
-});
-
 // Note: IPC validation handled by main process, no need for duplicate validation here
 globalThis.electronAPI = {
-  desktopCapture: {
-    chooseDesktopMedia: (sources, cb) => {
-      ipcRenderer
-        .invoke("choose-desktop-media", sources)
-        .then((streamId) => cb(streamId))
-        .catch(err => {
-          console.error('Desktop media choice failed:', err);
-          cb(null);
-        });
-      return Date.now();
-    },
-    cancelChooseDesktopMedia: () => ipcRenderer.send("cancel-desktop-media"),
-  },
-  sendScreenSharingStarted: (sourceId) => {
-    if (sourceId === null || (typeof sourceId === 'string' && sourceId.length < 100)) {
-      return ipcRenderer.send("screen-sharing-started", sourceId);
-    }
-    console.error('Invalid sourceId for screen sharing');
-  },
-  sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
-  stopSharing: () => ipcRenderer.send("stop-screen-sharing-from-thumbnail"),
-  sendSelectSource: () => ipcRenderer.send("select-source"),
-  onSelectSource: (callback) => ipcRenderer.once("select-source", callback),
-  send: (channel, ...args) => {
-    return ipcRenderer.send(channel, ...args);
-  },
-
   getConfig: () => ipcRenderer.invoke("get-config"),
 
   showNotification: (options) => {
@@ -135,23 +85,8 @@ globalThis.electronAPI = {
     return ipcRenderer.invoke("set-badge-count", count);
   },
 
-  updateTray: (icon, flash) => {
-    return ipcRenderer.send("tray-update", { icon, flash });
-  },
-
-  onSystemThemeChanged: (callback) => {
-    if (typeof callback !== 'function') {
-      console.error('Invalid callback for theme changed');
-      return;
-    }
-    return ipcRenderer.on("system-theme-changed", callback);
-  },
-
-  setUserStatus: (data) => {
-    if (!data || typeof data !== 'object') {
-      return Promise.reject(new Error('Invalid user status data'));
-    }
-    return ipcRenderer.invoke("user-status-changed", data);
+  updateTray: (icon, flash, count) => {
+    return ipcRenderer.send("tray-update", { icon, flash, count });
   },
 
   getZoomLevel: (partition) => {
@@ -178,30 +113,27 @@ globalThis.electronAPI = {
     return ipcRenderer.on("navigation-state-changed", callback);
   },
 
-  graphApi: {
-    getUserProfile: () => ipcRenderer.invoke("graph-api-get-user-profile"),
-    getCalendarEvents: (options) => ipcRenderer.invoke("graph-api-get-calendar-events", options),
-    getCalendarView: (start, end, options) => ipcRenderer.invoke("graph-api-get-calendar-view", start, end, options),
-    createCalendarEvent: (event) => ipcRenderer.invoke("graph-api-create-calendar-event", event),
-    getMailMessages: (options) => ipcRenderer.invoke("graph-api-get-mail-messages", options),
-  },
-
-  openChatWithUser: (email) => {
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      console.error('Invalid email for chat deep link');
-      return false;
-    }
-    // Use the current Teams base URL (could be teams.cloud.microsoft or teams.microsoft.com)
-    const currentOrigin = globalThis.location.origin;
-    const chatPath = `/l/chat/0/0?users=${encodeURIComponent(email)}`;
-    const chatUrl = `${currentOrigin}${chatPath}`;
-    console.debug('[CHAT_LINK] Navigating to chat via deep link');
-    globalThis.location.href = chatUrl;
-    return true;
-  },
-
   sessionType: process.env.XDG_SESSION_TYPE || "x11",
 };
+
+// Outlook keeps unread-count production generic: it updates the existing tray
+// and badge IPC APIs without loading the Teams-specific tray renderer module.
+let preloadConfig = null;
+globalThis.addEventListener("unread-count", (event) => {
+  const count = Number.isFinite(event?.detail?.number)
+    ? Math.max(0, Math.floor(event.detail.number))
+    : 0;
+  globalThis.electronAPI.updateTray(
+    null,
+    count > 0 && !preloadConfig?.disableNotificationWindowFlash,
+    count,
+  );
+  if (!preloadConfig?.disableBadgeCount) {
+    globalThis.electronAPI.setBadgeCount(count).catch((error) => {
+      console.debug("Preload: Failed to update badge count:", error.message);
+    });
+  }
+});
 
 // Config is fetched asynchronously; the Notification override below reads it via closure
 let notificationConfig = null;
@@ -405,6 +337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.debug("Preload: DOMContentLoaded, initializing browser modules...");
   try {
     const config = await ipcRenderer.invoke("get-config");
+    preloadConfig = config;
     console.debug("Preload: Got config:", {
       trayIconEnabled: config?.trayIconEnabled,
       useMutationTitleLogic: config?.useMutationTitleLogic
@@ -415,35 +348,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       mutationTitle.init(config);
     }
     
-    // NOTE: the unread-count event is handled by trayIconRenderer.js; a second
-    // listener here previously caused duplicate IPC traffic and rendering.
+    // The generic unread-count listener above owns tray and badge IPC updates.
 
     const modules = [
       { name: "zoom", path: "./tools/zoom" },
       { name: "shortcuts", path: "./tools/shortcuts" },
       { name: "settings", path: "./tools/settings" },
-      { name: "theme", path: "./tools/theme" },
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
-      { name: "timestampCopyOverride", path: "./tools/timestampCopyOverride" },
-      { name: "trayIconRenderer", path: "./tools/trayIconRenderer" },
-      { name: "mqttStatusMonitor", path: "./tools/mqttStatusMonitor" },
-      { name: "meetingStartDetector", path: "./tools/meetingStartDetector" },
-      { name: "overrideMicConstraints", path: "./tools/overrideMicConstraints" },
-      { name: "disableAutogain", path: "./tools/disableAutogain" },
-      { name: "ignoreSystemMute", path: "./tools/ignoreSystemMute" },
-      { name: "speakingIndicator", path: "./tools/speakingIndicator" },
-      { name: "cameraResolution", path: "./tools/cameraResolution" },
-      { name: "cameraAspectRatio", path: "./tools/cameraAspectRatio" },
       { name: "navigationButtons", path: "./tools/navigationButtons" },
-      { name: "framelessTweaks", path: "./tools/frameless" },
-      { name: "customStickers", path: "./tools/customStickers" },
-      { name: "dockIconRenderer", path: "./tools/dockIconRenderer" },
-      { name: "preventDeviceSwitching", path: "./tools/preventDeviceSwitching" }
+      { name: "framelessTweaks", path: "./tools/frameless" }
     ];
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
-    const modulesRequiringIpc = new Set(["settings", "theme", "trayIconRenderer", "mqttStatusMonitor", "meetingStartDetector", "webauthnOverride", "speakingIndicator", "customStickers", "dockIconRenderer"]);
+    const modulesRequiringIpc = new Set(["settings", "webauthnOverride"]);
 
     let successCount = 0;
     for (const module of modules) {
@@ -461,13 +379,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     console.info(`Preload: ${successCount}/${modules.length} browser modules initialized successfully`);
-
-    try {
-      const ActivityManager = require("./notifications/activityManager");
-      new ActivityManager(ipcRenderer, config).start();
-    } catch (err) {
-      console.error("Preload: ActivityManager failed to initialize:", err.message);
-    }
 
     // Listen for config changes from the main process (e.g., when menu toggles are clicked)
     ipcRenderer.on("config-changed", (_event, configChanges) => {

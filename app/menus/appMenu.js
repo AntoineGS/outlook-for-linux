@@ -10,24 +10,6 @@ exports = module.exports = (Menus) => ({
       click: () => Menus.open(),
     },
     {
-      label: "Join Meeting",
-      accelerator: "ctrl+J",
-      click: () => Menus.joinMeeting(),
-    },
-    {
-      label: "Return to Teams",
-      click: () => Menus.returnToTeams(),
-    },
-    ...(Menus.configGroup.startupConfig.quickChat?.enabled
-      ? [
-          {
-            label: "Quick Chat",
-            accelerator: Menus.configGroup.startupConfig.quickChat?.shortcut || undefined,
-            click: () => Menus.showQuickChat(),
-          },
-        ]
-      : []),
-    {
       label: "Refresh",
       accelerator: "ctrl+R",
       click: () => Menus.reload(),
@@ -77,14 +59,6 @@ exports = module.exports = (Menus) => ({
       click: () => Menus.about(),
     },
     getHelpMenu(Menus),
-    ...(Menus.configGroup.startupConfig.media?.video?.menuEnabled
-      ? [
-          {
-            type: "separator",
-          },
-          getVideoMenu(Menus),
-        ]
-      : []),
     {
       type: "separator",
     },

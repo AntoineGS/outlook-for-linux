@@ -11,6 +11,8 @@ const { spawn } = require("node:child_process");
 const windowStateKeeper = require("electron-window-state");
 const { StreamSelector } = require("../screenSharing");
 const IncomingCallToast = require("../incomingCallToast");
+const product = require("../product");
+const { registerFeatureIpc } = require("../security/featureIpc");
 const {
   collectPartitionsToClear,
   clearStorageForPartitions,
@@ -64,9 +66,11 @@ class BrowserWindowManager {
       };
     }
 
-    this.incomingCallToast = new IncomingCallToast((action) => {
-      this.window.webContents.send("incoming-call-action", action);
-    });
+    if (product.features.calls) {
+      this.incomingCallToast = new IncomingCallToast((action) => {
+        this.window.webContents.send("incoming-call-action", action);
+      });
+    }
 
     return this.window;
   }
@@ -84,7 +88,7 @@ class BrowserWindowManager {
 
   createNewBrowserWindow(windowState) {
     return new BrowserWindow({
-      title: "Teams for Linux",
+      title: product.name,
       x: windowState.x,
       y: windowState.y,
 
@@ -113,7 +117,9 @@ class BrowserWindowManager {
 
   assignEventHandlers() {
     // Handle screen sharing source selection from user
-    ipcMain.on("select-source", this.assignSelectSourceHandler());
+    if (product.features.screenSharing) {
+      registerFeatureIpc(true, "on", "select-source", this.assignSelectSourceHandler());
+    }
     if (this.screenLockInhibitionMethod === "WakeLockSentinel") {
       // Wake Lock auto-releases when document.visibilityState becomes 'hidden',
       // which happens on both minimise and tray-hide. Re-acquire on both events.
@@ -121,20 +127,16 @@ class BrowserWindowManager {
       this.window.on("restore", reAcquireWakeLock);
       this.window.on("show", reAcquireWakeLock);
     }
-    // Handle incoming call notification created
-    ipcMain.handle(
-      "incoming-call-created",
-      this.assignOnIncomingCallCreatedHandler()
-    );
-    // Handle incoming call notification ended
-    ipcMain.handle(
-      "incoming-call-ended",
-      this.assignOnIncomingCallEndedHandler()
-    );
-    // Notify when a call is connected
-    ipcMain.handle("call-connected", this.assignOnCallConnectedHandler());
-    // Notify when a call is disconnected
-    ipcMain.handle("call-disconnected", this.assignOnCallDisconnectedHandler());
+    if (product.features.calls) {
+      // Handle incoming call notification created
+      registerFeatureIpc(true, "handle", "incoming-call-created", this.assignOnIncomingCallCreatedHandler());
+      // Handle incoming call notification ended
+      registerFeatureIpc(true, "handle", "incoming-call-ended", this.assignOnIncomingCallEndedHandler());
+      // Notify when a call is connected
+      registerFeatureIpc(true, "handle", "call-connected", this.assignOnCallConnectedHandler());
+      // Notify when a call is disconnected
+      registerFeatureIpc(true, "handle", "call-disconnected", this.assignOnCallDisconnectedHandler());
+    }
   }
 
   assignSelectSourceHandler() {
