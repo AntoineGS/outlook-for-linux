@@ -1,6 +1,8 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
   installConsoleStreamErrorHandlers,
@@ -42,5 +44,23 @@ describe("console stream error handling", () => {
 
     assert.equal(stdout.listenerCount("error"), 1);
     assert.equal(stderr.listenerCount("error"), 1);
+  });
+
+  it("installs console handlers before Electron and configuration startup", () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, "..", "..", "app", "index.js"),
+      "utf8",
+    );
+    const installIndex = source.indexOf("installConsoleStreamErrorHandlers();");
+    const electronIndex = source.indexOf('require("electron")');
+    const configIndex = source.indexOf('require("./appConfiguration")');
+
+    assert.ok(installIndex >= 0, "main process installs console stream handlers");
+    assert.ok(installIndex < electronIndex, "handlers install before Electron loads");
+    assert.ok(installIndex < configIndex, "handlers install before configuration logging");
+    assert.doesNotMatch(
+      source,
+      /process\.stdout\.on\(["']error["'],\s*\(\) => \{\}\);/,
+    );
   });
 });
