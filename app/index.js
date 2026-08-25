@@ -1,4 +1,10 @@
 const {
+  installConsoleStreamErrorHandlers,
+} = require("./startup/consoleStreams");
+
+installConsoleStreamErrorHandlers();
+
+const {
   app,
   dialog,
   ipcMain,
@@ -675,8 +681,6 @@ async function handleAppReady() {
     process.on("SIGTRAP", onAppTerminated);
     process.on("SIGINT", onAppTerminated);
     process.on("SIGTERM", onAppTerminated);
-    process.stdout.on("error", () => {});
-
     initializeCacheManagement();
 
     if (product.features.teamsAutomation && config.mqtt?.enabled) {
