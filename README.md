@@ -38,6 +38,39 @@ System-level sandboxing provides better isolation than Electron's built-in featu
 Use `~/.config/outlook-for-linux/config.json` for supported settings. Unsupported
 legacy Teams settings are ignored with value-safe startup warnings.
 
+### Vim Mode
+
+Vim mode is disabled by default. To enable it, add the following to
+`~/.config/outlook-for-linux/config.json`, then restart Outlook for Linux:
+
+```json
+{
+  "shortcuts": {
+    "vim": {
+      "enabled": true
+    }
+  }
+}
+```
+
+| Binding | Outlook action |
+| --- | --- |
+| `j` / `k` | Select the next / previous message |
+| `gg` / `G` | Select the first / last message |
+| `h` / `l` | Collapse / expand the selected conversation |
+| `Enter` / `o` | Open the selected message |
+| `Escape` / `u` | Go back or close the current Outlook view |
+| `/` | Focus Outlook search |
+| `c` | Compose a new message |
+| `r` / `a` / `f` | Reply / reply all / forward |
+| `e` / `d` | Archive / delete the selected message |
+| `q` / `s` | Toggle read status / flag status |
+| `gi` / `gs` / `gd` | Open Inbox / Sent Items / Drafts |
+
+Bindings are suspended while focus is in editable, search, or dialog controls.
+If Outlook's DOM changes or a required control is missing or ambiguous, the
+corresponding action safely does nothing.
+
 ## History
 
 Read about the history of this project in the [`HISTORY.md`](HISTORY.md) file.

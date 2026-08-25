@@ -357,6 +357,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modules = [
       { name: "zoom", path: "./tools/zoom" },
       { name: "shortcuts", path: "./tools/shortcuts" },
+      { name: "vimBindings", path: "./tools/vimBindings" },
       { name: "settings", path: "./tools/settings" },
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },

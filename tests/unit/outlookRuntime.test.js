@@ -27,6 +27,7 @@ describe('Outlook runtime boundary', () => {
     for (const name of [
       'zoom',
       'shortcuts',
+      'vimBindings',
       'settings',
       'emulatePlatform',
       'webauthnOverride',

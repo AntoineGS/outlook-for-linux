@@ -146,6 +146,14 @@ Modifies platform detection to improve Teams web compatibility on Linux.
 #### [shortcuts.js](shortcuts.js)
 Implements custom keyboard shortcuts for in-app actions like zoom control and navigation.
 
+#### [vimBindings.js](vimBindings.js)
+Implements opt-in Vim-style keyboard command parsing and listener attachment for Outlook documents and accessible iframes.
+
+**Configuration**: `shortcuts.vim.enabled: true`
+
+#### [outlookActions.js](outlookActions.js)
+Provides defensive, accessibility-based Outlook DOM actions used by Vim mode. Missing or ambiguous controls are safe no-ops.
+
 #### [frameless.js](frameless.js)
 Ensures proper functionality of the top bar in frameless mode (i.e. without native window title bar).
 

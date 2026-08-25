@@ -1076,11 +1076,15 @@ module.exports = {
         default: {
           global: [],
           disableWhileFocused: [],
+          vim: {
+            enabled: false,
+          },
         },
         describe:
           "Keyboard shortcut configuration. " +
           "global: global keyboard shortcuts that work system-wide, disabled by default (opt-in). " +
           "disableWhileFocused: global shortcuts to disable while the app is in focus. " +
+          "vim.enabled: enable Vim-style Outlook navigation outside editable fields. " +
           "Replaces the deprecated globalShortcuts and disableGlobalShortcuts options.",
         type: "object",
         fields: {
@@ -1093,6 +1097,11 @@ module.exports = {
             type: "array",
             describe:
               "Array of global shortcuts to disable while the app is in focus. See https://www.electronjs.org/docs/latest/api/accelerator for available accelerators to use",
+          },
+          "vim.enabled": {
+            type: "boolean",
+            describe:
+              "Enable Vim-style Outlook navigation outside editable fields. Disabled by default.",
           },
         },
         applyMode: "restart",
