@@ -154,6 +154,41 @@ Implements opt-in Vim-style keyboard command parsing and listener attachment for
 
 **Configuration**: `shortcuts.vim.enabled: true`
 
+Composer editing is activated automatically by the same setting. `vimBindings`
+routes an unambiguous Outlook composer event to `vimEditing` before applying
+mailbox navigation guards; all other documents retain the existing navigation
+behavior.
+
+#### [vimCore.js](vimCore.js)
+Loads the pinned editor-agnostic `@replit/codemirror-vim-core@0.1.0` ESM
+runtime once, behind a small CodeMirror host shim. It owns the explicit MVP
+grammar, typed pass-through/handled/rejected outcomes, and fail-open loading
+boundary. Unsupported sequences never reach Vim core.
+
+#### [richTextPositionMap.js](richTextPositionMap.js)
+Projects Outlook's supported rich-text DOM into text offsets, directional DOM
+points, and Unicode grapheme boundaries. Known formatting and block elements
+are transparent; mentions, media, attachments, and unknown leaves are atomic.
+
+#### [richTextVimAdapter.js](richTextVimAdapter.js)
+Adapts the position map to Vim core without replacing Outlook's editor. It
+tracks live selection direction, preflights atomic boundaries, performs one
+native edit per accepted mutation, and rolls back through native undo when a
+command fails.
+
+#### [outlookComposer.js](outlookComposer.js)
+Detects exactly one visible, focused Outlook composer using the event path,
+contenteditable textbox semantics, and internal structural compose markers.
+Visible English or localized labels are not ownership signals. Search fields,
+unrelated dialogs, generic editors, hidden nodes, and ambiguous matches are
+rejected.
+
+#### [vimEditing.js](vimEditing.js)
+Owns composer sessions, asynchronous core readiness, focus switching, the
+`NORMAL`/`INSERT`/`VISUAL` badge, detached-node cleanup, and fail-open error
+handling. It removes observers, listeners, badges, and adapter sessions when a
+document is detached or reloaded, and when the controller is destroyed.
+
 #### [outlookActions.js](outlookActions.js)
 Provides defensive, accessibility-based Outlook DOM actions used by Vim mode. Missing or ambiguous controls are safe no-ops.
 

@@ -14,6 +14,7 @@ describe("Outlook origin policy integration", () => {
       "outlook.office.com",
       "outlook.office365.com",
       "outlook.live.com",
+      "outlook.cloud.microsoft",
       "outlook.office.com.mcas.ms",
     ]) {
       assert.equal(product.isAppHost(hostname), true, hostname);
@@ -32,6 +33,9 @@ describe("Outlook origin policy integration", () => {
       "eviloutlook.office.com",
       "attacker.outlook.office.com",
       "attacker.outlook.office.com.mcas.ms",
+      "attacker.outlook.cloud.microsoft",
+      "outlook.cloud.microsoft.evil.example",
+      "eviloutlook.cloud.microsoft",
       "attacker.login.microsoft.com",
       "attacker.login.microsoft.com.mcas.ms",
       "teams.microsoft.com",
@@ -57,8 +61,10 @@ describe("Outlook origin policy integration", () => {
     }
 
     for (const source of [
-      "https://outlook.office.com/error.js",
-      "https://outlook.office.com.mcas.ms/error.js",
+       "https://outlook.office.com/error.js",
+       "https://outlook.office.com.mcas.ms/error.js",
+       "https://outlook.cloud.microsoft/error.js",
+       "https://outlook.cloud.microsoft.mcas.ms/error.js",
       "https://login.microsoftonline.com/error.js",
       "https://login.microsoft.com/error.js",
       "https://login.live.com/error.js",
