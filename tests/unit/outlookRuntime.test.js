@@ -56,6 +56,12 @@ describe('Outlook runtime boundary', () => {
     }
   });
 
+  it('does not expose Vim spike bridges or testing globals from preload', () => {
+    assert.doesNotMatch(preloadSource, /E2E_TESTING/);
+    assert.doesNotMatch(preloadSource, /__vimRichText/);
+    assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
+  });
+
   it('does not start activity tracking or Teams-only main services', () => {
     assert.doesNotMatch(preloadSource, /new\s+ActivityManager\s*\(/);
     assert.match(appSource, /product\.features\.screenSharing/);

@@ -112,7 +112,12 @@ describe("Outlook product contract", () => {
     assert.equal(product.stripMcasSuffix("outlook.office.com.mcas.ms"), "outlook.office.com");
     assert.equal(product.stripMcasSuffix("outlook.office.com"), "outlook.office.com");
     assert.equal(product.isAppHost("outlook.office.com"), true);
+    assert.equal(product.isAppHost("outlook.cloud.microsoft"), true);
+    assert.equal(product.isAppHost("outlook.cloud.microsoft.mcas.ms"), true);
     assert.equal(product.isAppHost("sub.outlook.office.com"), false);
+    assert.equal(product.isAppHost("sub.outlook.cloud.microsoft"), false);
+    assert.equal(product.isAppHost("outlook.cloud.microsoft.evil.example"), false);
+    assert.equal(product.isAppHost("eviloutlook.cloud.microsoft"), false);
     assert.equal(product.isAppHost("deep.sub.outlook.office.com"), false);
     assert.equal(product.isAppHost("outlook.office.com.evil.example"), false);
     assert.equal(product.isAppHost("eviloutlook.office.com"), false);

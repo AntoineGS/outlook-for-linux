@@ -37,6 +37,10 @@ function createDocument(frames = []) {
 		addEventListener(type, listener, capture) {
 			this.listeners.push({ type, listener, capture });
 		},
+		removeEventListener(type, listener, capture) {
+			this.listeners = this.listeners.filter(item => item.type !== type ||
+				item.listener !== listener || item.capture !== capture);
+		},
 		querySelectorAll(selector) { return selector === 'iframe' ? frames : []; }
 	};
 }
@@ -56,6 +60,10 @@ function createMutationObserverClass() {
 		notify(records) {
 			this.callback(records);
 		}
+
+		disconnect() {
+			this.disconnected = true;
+		}
 	}
 	MutationObserverStub.instances = [];
 	return MutationObserverStub;
@@ -67,6 +75,9 @@ function createIframe(contentDocument) {
 		listeners: [],
 		addEventListener(type, listener) {
 			this.listeners.push({ type, listener });
+		},
+		removeEventListener(type, listener) {
+			this.listeners = this.listeners.filter(item => item.type !== type || item.listener !== listener);
 		}
 	};
 	Object.defineProperty(iframe, 'contentDocument', {
@@ -289,7 +300,14 @@ test('disabled mode attaches no listener and enabled mode attaches once', () => 
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	assert.deepEqual(document.listeners.map(({ type, capture }) => ({ type, capture })), [
-		{ type: 'keydown', capture: true }
+		{ type: 'focusin', capture: true },
+		{ type: 'focusout', capture: true },
+		{ type: 'blur', capture: true },
+		{ type: 'selectionchange', capture: true },
+		{ type: 'scroll', capture: true },
+		{ type: 'resize', capture: undefined },
+		{ type: 'blur', capture: undefined },
+		{ type: 'keydown', capture: true },
 	]);
 });
 
@@ -299,7 +317,7 @@ test('attached listeners dispatch through the injected action adapter', () => {
 	const bindings = createVimBindings({ actions: createActions(calls), document });
 
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	document.listeners[0].listener(createEvent('j'));
+	document.listeners.find(({ type }) => type === 'keydown').listener(createEvent('j'));
 
 	assert.deepEqual(calls, ['nextMessage']);
 });
@@ -317,9 +335,23 @@ test('attaches one capture listener per accessible document and skips inaccessib
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 
 	assert.deepEqual(document.listeners.map(({ type, capture }) => ({ type, capture })), [
-		{ type: 'keydown', capture: true }
+		{ type: 'focusin', capture: true },
+		{ type: 'focusout', capture: true },
+		{ type: 'blur', capture: true },
+		{ type: 'selectionchange', capture: true },
+		{ type: 'scroll', capture: true },
+		{ type: 'resize', capture: undefined },
+		{ type: 'blur', capture: undefined },
+		{ type: 'keydown', capture: true },
 	]);
 	assert.deepEqual(iframeDocument.listeners.map(({ type, capture }) => ({ type, capture })), [
+		{ type: 'focusin', capture: true },
+		{ type: 'focusout', capture: true },
+		{ type: 'blur', capture: true },
+		{ type: 'selectionchange', capture: true },
+		{ type: 'scroll', capture: true },
+		{ type: 'resize', capture: undefined },
+		{ type: 'blur', capture: undefined },
 		{ type: 'keydown', capture: true }
 	]);
 	assert.equal(MutationObserverClass.instances.length, 2);
@@ -335,7 +367,7 @@ test('does not attach duplicate listeners when an iframe document is reprocessed
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
 
-	assert.equal(iframeDocument.listeners.length, 1);
+	assert.equal(iframeDocument.listeners.length, 8);
 });
 
 test('attaches a newly added iframe document after initialization', () => {
@@ -348,8 +380,15 @@ test('attaches a newly added iframe document after initialization', () => {
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
 
-	assert.equal(iframeDocument.listeners.length, 1);
+	assert.equal(iframeDocument.listeners.length, 8);
 	assert.deepEqual(iframeDocument.listeners.map(({ type, capture }) => ({ type, capture })), [
+		{ type: 'focusin', capture: true },
+		{ type: 'focusout', capture: true },
+		{ type: 'blur', capture: true },
+		{ type: 'selectionchange', capture: true },
+		{ type: 'scroll', capture: true },
+		{ type: 'resize', capture: undefined },
+		{ type: 'blur', capture: undefined },
 		{ type: 'keydown', capture: true }
 	]);
 });
@@ -367,7 +406,7 @@ test('attaches an iframe document inside a newly added container subtree', () =>
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	MutationObserverClass.instances[0].notify([{ addedNodes: [container] }]);
 
-	assert.equal(iframeDocument.listeners.length, 1);
+	assert.equal(iframeDocument.listeners.length, 8);
 });
 
 test('rebinds an iframe after reload without duplicating its load listener', () => {
@@ -385,7 +424,123 @@ test('rebinds an iframe after reload without duplicating its load listener', () 
 	loadListeners[0].listener();
 	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
 
-	assert.equal(firstDocument.listeners.length, 1);
-	assert.equal(secondDocument.listeners.length, 1);
+	assert.equal(firstDocument.listeners.length, 0);
+	assert.equal(secondDocument.listeners.length, 8);
 	assert.deepEqual(iframe.listeners.map(({ type }) => type), ['load']);
+});
+
+function createEditing(outcomes = []) {
+	const calls = [];
+	const destroyedDocuments = [];
+	let destroyCalls = 0;
+	return {
+		calls,
+		destroyedDocuments,
+		get destroyCalls() { return destroyCalls; },
+		init() {},
+		handleKeydown(event, document) {
+			calls.push({ event, document });
+			return outcomes.shift() || 'pass-through';
+		},
+		destroyDocument(document) { destroyedDocuments.push(document); },
+		destroy() { destroyCalls++; }
+	};
+}
+
+test('routes every key through editing before mailbox actions', () => {
+	const calls = [];
+	const document = createDocument();
+	const editing = createEditing(['handled', 'pass-through', 'pass-through', 'pass-through']);
+	const bindings = createVimBindings({ actions: createActions(calls), document, editing });
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
+	const composer = { getAttribute: name => name === 'contenteditable' ? 'true' :
+		name === 'role' ? 'textbox' : null };
+
+	const normalEvent = createEvent('j', { composedPath: () => [composer] });
+	keydown(normalEvent);
+	assert.deepEqual(calls, []);
+	assert.equal(normalEvent.preventDefaultCalled, false);
+
+	const insertEvent = createEvent('x', { composedPath: () => [composer] });
+	keydown(insertEvent);
+	assert.deepEqual(calls, []);
+
+	const modifiedSend = createEvent('Enter', { ctrlKey: true, composedPath: () => [composer] });
+	keydown(modifiedSend);
+	assert.equal(modifiedSend.preventDefaultCalled, false);
+
+	const mailboxEvent = createEvent('j');
+	keydown(mailboxEvent);
+	assert.deepEqual(calls, ['nextMessage']);
+	assert.equal(editing.calls.every(call => call.document === document), true);
+});
+
+test('does not route search and dialog fields to mailbox actions after editing pass-through', () => {
+	const calls = [];
+	const document = createDocument();
+	const editing = createEditing(['pass-through', 'pass-through']);
+	const bindings = createVimBindings({ actions: createActions(calls), document, editing });
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
+
+	keydown(createEvent('j', { composedPath: () => [{ tagName: 'INPUT' }] }));
+	keydown(createEvent('j', { composedPath: () => [{ getAttribute: name => name === 'role' ? 'dialog' : null }] }));
+
+	assert.deepEqual(calls, []);
+	assert.equal(editing.calls.length, 2);
+});
+
+test('destroys document listeners and editing sessions exactly once', () => {
+	const document = createDocument();
+	const editing = createEditing();
+	const MutationObserverClass = createMutationObserverClass();
+	const bindings = createVimBindings({ document, editing, MutationObserverClass });
+
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
+	assert.equal(typeof keydown, 'function');
+	bindings.destroy();
+	bindings.destroy();
+
+	assert.deepEqual(document.listeners, []);
+	assert.equal(MutationObserverClass.instances.every(observer => observer.disconnected), true);
+});
+
+test('routes iframe events to the iframe document and tears them down on detach', () => {
+	const calls = [];
+	const iframeDocument = createDocument();
+	const iframe = createIframe(iframeDocument);
+	const document = createDocument([iframe]);
+	const editing = createEditing();
+	const MutationObserverClass = createMutationObserverClass();
+	const bindings = createVimBindings({ actions: createActions(calls), document, editing, MutationObserverClass });
+
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const iframeKeydown = iframeDocument.listeners.find(({ type }) => type === 'keydown').listener;
+	iframeKeydown(createEvent('j'));
+	assert.equal(editing.calls[0].document, iframeDocument);
+
+	MutationObserverClass.instances[0].notify([{ removedNodes: [iframe], addedNodes: [] }]);
+	assert.deepEqual(iframeDocument.listeners, []);
+	assert.deepEqual(iframe.listeners, []);
+	assert.deepEqual(editing.destroyedDocuments, [iframeDocument]);
+});
+
+test('destroys editing globally once and removes iframe load listeners on final destroy', () => {
+	const iframeDocument = createDocument();
+	const iframe = createIframe(iframeDocument);
+	const document = createDocument([iframe]);
+	const editing = createEditing();
+	const bindings = createVimBindings({ document, editing });
+
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	assert.deepEqual(iframe.listeners.map(({ type }) => type), ['load']);
+	bindings.destroy();
+	bindings.destroy();
+
+	assert.deepEqual(iframe.listeners, []);
+	assert.equal(editing.destroyedDocuments.filter(value => value === iframeDocument).length, 1);
+	assert.equal(editing.destroyedDocuments.filter(value => value === document).length, 1);
+	assert.equal(editing.destroyCalls, 1);
 });
