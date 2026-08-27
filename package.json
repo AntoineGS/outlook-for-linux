@@ -81,6 +81,15 @@
   },
   "build": {
     "appId": "outlook-for-linux",
+    "files": [
+      "**/*",
+      "!tests{,/**/*}",
+      "!.superpowers{,/**/*}",
+      "!docs/superpowers/plans{,/**/*}",
+      "!docs/superpowers/specs{,/**/*}",
+      "!test-results{,/**/*}",
+      "!playwright-report{,/**/*}"
+    ],
     "asarUnpack": [
       "node_modules/spellchecker/vendor/hunspell_dictionaries"
     ],

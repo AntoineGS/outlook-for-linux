@@ -4,6 +4,7 @@ const appHosts = Object.freeze([
   "outlook.office.com",
   "outlook.office365.com",
   "outlook.live.com",
+  "outlook.cloud.microsoft",
 ]);
 
 const authHosts = Object.freeze([
