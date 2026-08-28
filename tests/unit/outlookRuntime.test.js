@@ -62,6 +62,12 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
+  it('creates a Vim controller for each navigated document', () => {
+    assert.match(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
+    assert.match(preloadSource, /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document/);
+    assert.match(preloadSource, /addEventListener\(["']pagehide["'][\s\S]*?controller\.destroy\(\)/);
+  });
+
   it('does not start activity tracking or Teams-only main services', () => {
     assert.doesNotMatch(preloadSource, /new\s+ActivityManager\s*\(/);
     assert.match(appSource, /product\.features\.screenSharing/);
