@@ -5,8 +5,8 @@ const {
   nativeImage,
   nativeTheme,
   powerSaveBlocker,
+  session,
 } = require("electron");
-const path = require("node:path");
 const { spawn } = require("node:child_process");
 const windowStateKeeper = require("electron-window-state");
 const { StreamSelector } = require("../screenSharing");
@@ -17,6 +17,7 @@ const {
   collectPartitionsToClear,
   clearStorageForPartitions,
 } = require("../utils/storagePartitions");
+const { registerBrowserPreload } = require("./browserPreloadSession");
 
 class BrowserWindowManager {
   constructor(properties) {
@@ -55,6 +56,7 @@ class BrowserWindowManager {
       );
     }
 
+    registerBrowserPreload(session.fromPartition(this.config.partition), this.config.partition);
     this.window = this.createNewBrowserWindow(windowState);
     this.assignEventHandlers();
 
@@ -103,7 +105,6 @@ class BrowserWindowManager {
 
       webPreferences: {
         partition: this.config.partition,
-        preload: path.join(__dirname, "..", "browser", "preload.js"),
         plugins: true,
         spellcheck: true,
         webviewTag: true,
