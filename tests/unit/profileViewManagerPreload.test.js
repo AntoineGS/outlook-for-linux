@@ -9,6 +9,7 @@ test('registers a profile session preload before constructing its Outlook view',
 		registerPreloadScript: () => events.push('register'),
 	};
 	let profileViewOptions;
+	let profileWebContents;
 	class WebContentsView {
 		constructor(options) {
 			if (options.webPreferences.partition) {
@@ -21,6 +22,7 @@ test('registers a profile session preload before constructing its Outlook view',
 			this.webContents.loadFile = () => {};
 			this.webContents.isDestroyed = () => false;
 			this.webContents.send = () => {};
+			if (options.webPreferences.partition) profileWebContents = this.webContents;
 		}
 		setBounds() {}
 		setBackgroundColor() {}
@@ -68,4 +70,6 @@ test('registers a profile session preload before constructing its Outlook view',
 
 	assert.deepEqual(events.slice(0, 2), ['register', 'construct']);
 	assert.equal(profileViewOptions.webPreferences.preload, undefined);
+	assert.equal(profileWebContents.listenerCount('dom-ready'), 1);
+	assert.equal(profileWebContents.listenerCount('did-frame-finish-load'), 1);
 });

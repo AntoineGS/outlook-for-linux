@@ -26,6 +26,7 @@ const product = require("../product");
 const { isApprovedRendererSource } = require("./authRecoverySource");
 const { resolveLaunchUrl } = require("../urlHandling");
 const { registerFeatureIpc } = require("../security/featureIpc");
+const { scheduleOutlookBrowserRuntimeInjection } = require("./outlookBrowserRuntimeInjector");
 
 const DEFAULT_SCREEN_SHARING_THUMBNAIL_CONFIG = {
   enabled: true,
@@ -958,6 +959,10 @@ function onDidFinishLoad() {
   initSystemThemeFollow(config);
 }
 
+function onDomReady() {
+  scheduleOutlookBrowserRuntimeInjection(window.webContents, config);
+}
+
 function injectScreenSharingLogic() {
   const fs = require("node:fs");
   const scriptPath = path.join(
@@ -1000,6 +1005,7 @@ function onDidFrameFinishLoad(
   frameRoutingId
 ) {
   console.debug("did-frame-finish-load", event, isMainFrame);
+  scheduleOutlookBrowserRuntimeInjection(window.webContents, config);
 
   if (isMainFrame) {
     return; // We want to insert CSS only into the Teams V2 content iframe
@@ -1301,6 +1307,7 @@ function addEventHandlers() {
     onBeforeSendHeadersHandler
   );
   window.webContents.on("did-finish-load", onDidFinishLoad);
+  window.webContents.on("dom-ready", onDomReady);
   window.webContents.on("did-frame-finish-load", onDidFrameFinishLoad);
   window.on("closed", onWindowClosed);
   window.webContents.addListener("before-input-event", onBeforeInput);

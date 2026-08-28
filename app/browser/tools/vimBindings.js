@@ -109,7 +109,7 @@ function createCommandResolver(actions, clock = {}) {
 
 function createVimBindings({ actions = outlookActions, document: rootDocument = globalThis.document,
 	MutationObserverClass = globalThis.MutationObserver,
-	editing = null, createEditing = createVimEditing } = {}) {
+	editing = null, createEditing = createVimEditing, manageFrames = true } = {}) {
 	const documentRecords = new Map();
 	const frameRecords = new Map();
 	const managedEditings = new Map();
@@ -192,6 +192,7 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		documentRecords.set(document, record);
 		record.editing.init?.(config);
 		document.addEventListener?.('keydown', record.keydownHandler, true);
+		if (!manageFrames) return;
 		attachFrames(document);
 		if (typeof MutationObserverClass !== 'function') return;
 		const observer = new MutationObserverClass(records => {

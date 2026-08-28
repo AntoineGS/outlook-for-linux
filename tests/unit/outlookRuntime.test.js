@@ -8,7 +8,9 @@ const { join } = require('node:path');
 
 const ROOT = join(__dirname, '..', '..');
 const preloadSource = readFileSync(join(ROOT, 'app', 'browser', 'preload.js'), 'utf8');
+const browserRuntimeSource = readFileSync(join(ROOT, 'app', 'browser', 'outlookBrowserRuntime.js'), 'utf8');
 const appSource = readFileSync(join(ROOT, 'app', 'index.js'), 'utf8');
+const mainWindowSource = readFileSync(join(ROOT, 'app', 'mainAppWindow', 'index.js'), 'utf8');
 const menuSource = readFileSync(join(ROOT, 'app', 'menus', 'appMenu.js'), 'utf8');
 
 function sha256(value) {
@@ -27,12 +29,10 @@ describe('Outlook runtime boundary', () => {
     for (const name of [
       'zoom',
       'shortcuts',
-      'vimBindings',
       'settings',
       'emulatePlatform',
       'webauthnOverride',
       'navigationButtons',
-      'outlookAdSuppressor',
       'framelessTweaks',
     ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
@@ -52,6 +52,8 @@ describe('Outlook runtime boundary', () => {
       'customStickers',
       'dockIconRenderer',
       'preventDeviceSwitching',
+      'vimBindings',
+      'outlookAdSuppressor',
     ]) {
       assert.ok(!modules.includes(name), `Teams-only module ${name} must not load`);
     }
@@ -63,10 +65,18 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
-  it('creates a Vim controller for each navigated document', () => {
-    assert.match(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
-    assert.match(preloadSource, /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document/);
-    assert.match(preloadSource, /addEventListener\(["']pagehide["'][\s\S]*?controller\.destroy\(\)/);
+  it('owns Vim and ad lifecycle in the injected browser runtime', () => {
+    assert.doesNotMatch(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
+    assert.match(browserRuntimeSource, /outlookAdSuppressor\.init\(__OFL_CONFIG__\)/);
+    assert.match(browserRuntimeSource, /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document/);
+    assert.match(browserRuntimeSource, /addEventListener\(['"]pagehide['"][\s\S]*?vimController\.destroy\(\)/);
+  });
+
+  it('injects the browser runtime after approved Outlook documents load', () => {
+    assert.match(mainWindowSource, /require\(['"]\.\/outlookBrowserRuntimeInjector['"]\)/);
+    assert.match(mainWindowSource, /function onDomReady\(\)[\s\S]*?scheduleOutlookBrowserRuntimeInjection\(window\.webContents, config\)/);
+    assert.match(mainWindowSource, /webContents\.on\(['"]dom-ready['"], onDomReady\)/);
+    assert.match(mainWindowSource, /onDidFrameFinishLoad[\s\S]*?scheduleOutlookBrowserRuntimeInjection\(window\.webContents, config\)/);
   });
 
   it('does not start activity tracking or Teams-only main services', () => {
