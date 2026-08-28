@@ -21,7 +21,7 @@ const FORBIDDEN_IDENTIFIERS = [
 	'task6-vim-controls',
 	'fixture-mention',
 ];
-const FORBIDDEN_PATH = /(?:^|\/)(?:tests|\.superpowers|test-results|playwright-report|docs\/(?:plans|specs|superpowers\/plans|superpowers\/specs)|Cookies|Local Storage|session)(?:\/|$)/i;
+const FORBIDDEN_PATH = /(?:^|\/)(?:tests|\.worktrees|\.superpowers|test-results|playwright-report|docs\/(?:plans|specs|superpowers\/plans|superpowers\/specs)|Cookies|Local Storage|session)(?:\/|$)/i;
 
 function evaluateVimEditingPackage(files, contents, extractionFailures = []) {
 	const failures = [];
