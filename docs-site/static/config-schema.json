@@ -1207,7 +1207,7 @@
           "enabled": false
         }
       },
-      "description": "Keyboard shortcut configuration. global: global keyboard shortcuts that work system-wide, disabled by default (opt-in). disableWhileFocused: global shortcuts to disable while the app is in focus. vim.enabled: enable Vim-style Outlook navigation outside editable fields. Replaces the deprecated globalShortcuts and disableGlobalShortcuts options.",
+      "description": "Keyboard shortcut configuration. global: global keyboard shortcuts that work system-wide, disabled by default (opt-in). disableWhileFocused: global shortcuts to disable while the app is in focus. vim.enabled: enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Replaces the deprecated globalShortcuts and disableGlobalShortcuts options.",
       "applyMode": "restart",
       "fields": [
         {
@@ -1226,7 +1226,7 @@
           "path": "vim.enabled",
           "type": "boolean",
           "default": false,
-          "description": "Enable Vim-style Outlook navigation outside editable fields. Disabled by default."
+          "description": "Enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Disabled by default."
         }
       ]
     },

@@ -25,6 +25,7 @@
     "postinstall": "electron-builder install-app-deps",
     "lint": "eslint **/*.js",
     "test:unit": "node --test 'tests/unit/*.test.js'",
+    "test:vim-renderer": "DISPLAY=${DISPLAY:-:1} WAYLAND_DISPLAY= electron --no-sandbox --ozone-platform=x11 tests/probes/vimRichTextProbe.js",
     "test:e2e": "playwright test",
     "test:authenticated": "playwright test --config playwright.authenticated.config.js",
     "cross-distro": "cd tests/cross-distro && ./run.sh",
@@ -36,6 +37,7 @@
     "generate-release-info": "node scripts/generateReleaseInfo.js",
     "generate-ipc-docs": "node scripts/generateIpcDocs.js",
     "generate-config-docs": "node scripts/generateConfigDocs.js",
+    "verify:vim-package": "node scripts/verifyVimEditingPackage.js",
     "prebuild": "npm run generate-release-info",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -57,6 +59,7 @@
   },
   "dependencies": {
     "@homebridge/dbus-native": "0.7.9",
+    "@replit/codemirror-vim-core": "0.1.0",
     "cbor-x": "^1.6.5",
     "electron-log": "^5.4.4",
     "electron-store": "11.0.2",
@@ -81,6 +84,16 @@
   },
   "build": {
     "appId": "outlook-for-linux",
+    "files": [
+      "**/*",
+      "!tests{,/**/*}",
+      "!.superpowers{,/**/*}",
+      "!docs/superpowers/plans{,/**/*}",
+      "!docs/superpowers/specs{,/**/*}",
+      "!scripts/verifyVimEditingPackage.js",
+      "!test-results{,/**/*}",
+      "!playwright-report{,/**/*}"
+    ],
     "asarUnpack": [
       "node_modules/spellchecker/vendor/hunspell_dictionaries"
     ],

@@ -1084,7 +1084,8 @@ module.exports = {
           "Keyboard shortcut configuration. " +
           "global: global keyboard shortcuts that work system-wide, disabled by default (opt-in). " +
           "disableWhileFocused: global shortcuts to disable while the app is in focus. " +
-          "vim.enabled: enable Vim-style Outlook navigation outside editable fields. " +
+           "vim.enabled: enable Vim-style Outlook navigation outside editable fields " +
+           "and automatic Vim editing in Outlook message composers. " +
           "Replaces the deprecated globalShortcuts and disableGlobalShortcuts options.",
         type: "object",
         fields: {
@@ -1101,7 +1102,8 @@ module.exports = {
           "vim.enabled": {
             type: "boolean",
             describe:
-              "Enable Vim-style Outlook navigation outside editable fields. Disabled by default.",
+              "Enable Vim-style Outlook navigation outside editable fields and automatic " +
+              "Vim editing in Outlook message composers. Disabled by default.",
           },
         },
         applyMode: "restart",
