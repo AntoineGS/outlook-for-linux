@@ -286,7 +286,7 @@ test('does not count nested editors and rejects a disabled Send marker', () => {
 test('accepts the live Outlook compose structure without synthetic markers', () => {
 	const editor = new NodeStub('div', { contenteditable: 'true', role: 'textbox', 'aria-label': 'Message body' });
 	const editorParent = new NodeStub('div', { id: 'editorParent_1' }, [editor]);
-	const dockingTrigger = new NodeStub('div', { id: 'docking_DockingTriggerPart_1' }, [editorParent]);
+	const dockingTrigger = new NodeStub('div', { id: 'docking_DockingTriggerPart_1' }, [new NodeStub('div', {}, [editorParent])]);
 	const send = new NodeStub('button', { id: 'splitButton-r6m__primaryActionButton' });
 	const discard = new NodeStub('button', { id: 'discardCompose' });
 	new NodeStub('div', {}, [dockingTrigger, send, discard]);
