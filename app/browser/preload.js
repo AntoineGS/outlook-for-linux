@@ -362,6 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
       { name: "navigationButtons", path: "./tools/navigationButtons" },
+      { name: "outlookAdSuppressor", path: "./tools/outlookAdSuppressor" },
       { name: "framelessTweaks", path: "./tools/frameless" }
     ];
 

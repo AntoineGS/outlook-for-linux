@@ -32,6 +32,7 @@ describe('Outlook runtime boundary', () => {
       'emulatePlatform',
       'webauthnOverride',
       'navigationButtons',
+      'outlookAdSuppressor',
       'framelessTweaks',
     ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);

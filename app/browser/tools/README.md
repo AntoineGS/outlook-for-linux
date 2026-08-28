@@ -1,10 +1,10 @@
 # Browser Tools
 
-Client-side scripts that are injected into the Microsoft Teams web interface to provide enhanced functionality and integrate with the desktop environment.
+Client-side scripts injected into the hosted Microsoft web application to provide enhanced functionality and desktop integration.
 
 ## Overview
 
-These tools operate in the renderer process and interact directly with the Teams web application DOM and APIs. They are loaded via the preload script and initialized based on configuration settings.
+These tools operate in the renderer process and interact directly with the hosted web application DOM and APIs. They are loaded via the preload script and initialized based on configuration settings.
 
 ## Available Tools
 
@@ -137,6 +137,9 @@ Manages zoom level controls and persistence across sessions.
 
 #### [navigationButtons.js](navigationButtons.js)
 Adds back and forward navigation buttons to the Teams interface, similar to the Microsoft official Teams app. Injects styled buttons next to the search region and handles navigation state updates.
+
+#### [outlookAdSuppressor.js](outlookAdSuppressor.js)
+Always removes clearly identified Outlook advertising slots and lets Outlook reclaim their layout space. The selectors use explicit Outlook ad IDs, assets, and structural markers; they do not hide Microsoft 365 purchase controls or match localized ad text. Suppression is built in and has no configuration option.
 
 ### System Integration
 
