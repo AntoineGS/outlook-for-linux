@@ -373,7 +373,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const module of modules) {
       try {
         const moduleInstance = require(module.path);
-        if (modulesRequiringIpc.has(module.name)) {
+        if (module.name === "vimBindings") {
+          const controller = moduleInstance.createVimBindings({
+            document: globalThis.document,
+            MutationObserverClass: globalThis.MutationObserver,
+          });
+          controller.init(config);
+          globalThis.addEventListener("pagehide", () => controller.destroy(), {
+            once: true,
+          });
+        } else if (modulesRequiringIpc.has(module.name)) {
           moduleInstance.init(config, ipcRenderer);
         } else {
           moduleInstance.init(config);
