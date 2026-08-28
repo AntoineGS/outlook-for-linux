@@ -58,6 +58,24 @@ test('package verifier fails closed when a relevant source entry cannot be extra
 	);
 });
 
+test('package verifier rejects project-local worktree entries', () => {
+	const files = [
+		'/package.json', ...runtimeFiles,
+		'/node_modules/@replit/codemirror-vim-core/package.json',
+		'/.worktrees/feature/app/index.js',
+	];
+	const contents = new Map([
+		['/package.json', '{"dependencies":{"@replit/codemirror-vim-core":"0.1.0"}}'],
+		['/node_modules/@replit/codemirror-vim-core/package.json', '{"version":"0.1.0"}'],
+		['/app/browser/tools/vimCore.js', "import('@replit/codemirror-vim-core')"],
+	]);
+
+	assert.deepEqual(
+		evaluateVimEditingPackage(files, contents),
+		['forbidden tests/reports/plans/session artifacts are present'],
+	);
+});
+
 test('package verifier requires the runtime dynamic import smoke marker', () => {
 	const files = ['/package.json', ...runtimeFiles, '/node_modules/@replit/codemirror-vim-core/package.json'];
 	const contents = new Map([
