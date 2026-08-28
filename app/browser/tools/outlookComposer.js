@@ -76,10 +76,16 @@ function liveComposeDetails(editor) {
 	const nodes = descendants(context);
 	const triggers = nodes.filter(candidate => /^docking_DockingTriggerPart_\d+$/.test(attribute(candidate, 'id') || ''));
 	if (triggers.length !== 1 || triggers[0] !== trigger) return null;
+	const ownedByTrigger = node => {
+		for (let current = node.parentElement; current && current !== trigger; current = current.parentElement) {
+			if (isContextBoundary(current) || /^docking_DockingTriggerPart_\d+$/.test(attribute(current, 'id') || '')) return false;
+		}
+		return trigger.contains?.(node) === true;
+	};
 	const editors = nodes.filter(candidate =>
 		attribute(candidate, 'contenteditable') === 'true' && attribute(candidate, 'role') === 'textbox' &&
 		/^editorParent_\d+$/.test(attribute(candidate.parentElement, 'id') || '') &&
-		candidate.parentElement.parentElement === trigger && !isHidden(candidate));
+		ownedByTrigger(candidate) && !isHidden(candidate));
 	const sends = nodes.filter(candidate =>
 		(['BUTTON', undefined].includes(candidate.tagName) || attribute(candidate, 'role') === 'button') &&
 		/^splitButton-[A-Za-z0-9_-]+__primaryActionButton$/.test(attribute(candidate, 'id') || '') &&

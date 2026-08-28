@@ -239,6 +239,10 @@ function createVimDriver(adapter, corePromise = loadVimCore()) {
 			['Enter', 'Backspace', 'Delete'].includes(event.key);
 		const handleNormal = event => {
 			const key = event.key;
+			if (key === 'Escape' && !isModifiedShortcut(event) && !event.shiftKey) {
+				reset();
+				return 'handled';
+			}
 			const exactCtrlR = key === 'r' && event.ctrlKey &&
 				!event.altKey && !event.metaKey && !event.shiftKey;
 			if (isModifiedShortcut(event) && !exactCtrlR) {
