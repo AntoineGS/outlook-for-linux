@@ -2,6 +2,7 @@ const { WebContentsView, session, ipcMain } = require("electron");
 const path = require("node:path");
 const product = require("../product");
 const { registerBrowserPreload } = require("./browserPreloadSession");
+const { scheduleOutlookBrowserRuntimeInjection } = require("./outlookBrowserRuntimeInjector");
 
 const LEGACY_PARTITION = product.partition;
 
@@ -359,6 +360,9 @@ class ProfileViewManager {
         sandbox: false,
       },
     });
+    const scheduleBrowserRuntime = () => scheduleOutlookBrowserRuntimeInjection(view.webContents, this.#config);
+    view.webContents.on("dom-ready", scheduleBrowserRuntime);
+    view.webContents.on("did-frame-finish-load", scheduleBrowserRuntime);
 
     // Rebind the in-app screen-share picker on this profile's session.
     // `setDisplayMediaRequestHandler` is per-session and the root window's

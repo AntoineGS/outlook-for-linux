@@ -214,7 +214,7 @@ function createVimEditing({
 			Promise.resolve(coreLoad).then(loadedCore => {
 				core = loadedCore;
 				activateFocusedComposer(rootDocument);
-			}).catch(() => {});
+			}).catch(() => console.warn('[VIM_MODE] Vim core failed to load'));
 		} else {
 			core = coreLoad;
 			activateFocusedComposer(rootDocument);
