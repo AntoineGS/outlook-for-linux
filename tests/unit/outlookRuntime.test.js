@@ -2,7 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { join } = require('node:path');
 
@@ -29,11 +29,11 @@ describe('Outlook runtime boundary', () => {
       'shortcuts',
       'settings',
       'emulatePlatform',
-      'webauthnOverride',
-      'navigationButtons',
-      'outlookAdSuppressor',
-      'framelessTweaks',
-    ]) {
+       'webauthnOverride',
+       'navigationButtons',
+       'framelessTweaks',
+       'outlookAdSuppressor',
+     ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
     }
 
@@ -61,6 +61,17 @@ describe('Outlook runtime boundary', () => {
     assert.match(appSource, /product\.features\.screenSharing/);
     assert.match(appSource, /product\.features\.customBackgrounds/);
     assert.match(appSource, /product\.features\.customStickers/);
+  });
+
+  it('does not register a session-wide frame preload', () => {
+    assert.equal(
+      existsSync(join(ROOT, 'app', 'mainAppWindow', 'browserPreloadSession.js')),
+      false,
+    );
+    assert.equal(
+      existsSync(join(ROOT, 'app', 'browser', 'sessionPreload.js')),
+      false,
+    );
   });
 
   it('keeps unread-count on the generic tray and badge APIs', () => {

@@ -361,8 +361,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
       { name: "navigationButtons", path: "./tools/navigationButtons" },
+      { name: "framelessTweaks", path: "./tools/frameless" },
       { name: "outlookAdSuppressor", path: "./tools/outlookAdSuppressor" },
-      { name: "framelessTweaks", path: "./tools/frameless" }
     ];
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
