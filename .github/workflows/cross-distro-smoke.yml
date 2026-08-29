@@ -1,11 +1,28 @@
 name: Cross-Distro Smoke Test
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      artifact_name:
+        type: string
+        default: outlook-for-linux-linux-x64
+      run_id:
+        type: string
+        default: ""
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build workflow run containing the x64 artifact"
+        required: true
+        type: string
+      artifact_name:
+        description: "Artifact name"
+        required: false
+        default: outlook-for-linux-linux-x64
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -22,21 +39,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve latest AppImage URL
-        id: appimage
+      - name: Download same-run x64 artifacts
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.run_id || github.run_id }}
+          ARTIFACT_NAME: ${{ inputs.artifact_name || 'outlook-for-linux-linux-x64' }}
         run: |
-          # gh CLI's release view returns .url as the browser download URL
-          # (unlike the raw REST API, where .url is the API endpoint).
-          URL=$(gh release view --repo IsmaelMartinez/teams-for-linux --json assets \
-            --jq '.assets[] | select(.name | test("\\.AppImage$") and (test("-(arm64|armv7l)\\.AppImage$") | not)) | .url' | head -1)
-          if [ -z "$URL" ]; then
-            echo "::error::Could not resolve AppImage URL from latest release"
+          set -euo pipefail
+          rm -rf tests/cross-distro/app
+          mkdir -p tests/cross-distro/app
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir tests/cross-distro/app
+          mapfile -t appimages < <(find tests/cross-distro/app -maxdepth 1 -type f -name '*.AppImage')
+          if [ "${#appimages[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one x64 AppImage, found ${#appimages[@]}"
             exit 1
           fi
-          echo "url=${URL}" >> "$GITHUB_OUTPUT"
-          echo "Resolved AppImage URL: ${URL}"
+          mv "${appimages[0]}" tests/cross-distro/app/teams-for-linux.AppImage
+          chmod +x tests/cross-distro/app/teams-for-linux.AppImage
 
       - name: Build Docker image
         env:
@@ -53,7 +75,6 @@ jobs:
         env:
           DISTRO: ${{ matrix.distro }}
           DISPLAY_SERVER: ${{ matrix.display }}
-          APP_URL: ${{ steps.appimage.outputs.url }}
         run: |
           docker run -d \
             --name "smoke-${DISTRO}-${DISPLAY_SERVER}" \
@@ -64,9 +85,9 @@ jobs:
             --shm-size 4g \
             --platform linux/amd64 \
             -e "DISPLAY_SERVER=${DISPLAY_SERVER}" \
-            -e "APP_URL=${APP_URL}" \
             -e AUTO_LAUNCH=true \
             -e SCREEN_RESOLUTION=1920x1080x24 \
+            -v "$GITHUB_WORKSPACE/tests/cross-distro/app:/app:ro" \
             "cross-distro-${DISTRO}"
 
       - name: Run smoke check
