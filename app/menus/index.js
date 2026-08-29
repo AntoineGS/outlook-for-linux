@@ -21,7 +21,6 @@ const TrayIconChooser = require("../browser/tools/trayIconChooser");
 const { SpellCheckProvider } = require("../spellCheckProvider");
 const DocumentationWindow = require("../documentationWindow");
 const GpuInfoWindow = require("../gpuInfoWindow");
-const JoinMeetingDialog = require("../joinMeetingDialog");
 const AddProfileDialog = require("../profileDialogs/addProfile");
 const ManageProfileDialog = require("../profileDialogs/manageProfile");
 const autoUpdaterModule = require("../autoUpdater");
@@ -50,10 +49,12 @@ class Menus {
     this.allowQuit = false;
     this.documentationWindow = new DocumentationWindow();
     this.gpuInfoWindow = new GpuInfoWindow();
-    this.joinMeetingDialog = new JoinMeetingDialog(
-      this.window,
-      this.configGroup.startupConfig.meetupJoinRegEx
-    );
+    this.joinMeetingDialog = product.features.calls
+      ? new (require('../joinMeetingDialog'))(
+        this.window,
+        this.configGroup.startupConfig.meetupJoinRegEx,
+      )
+      : null;
     // Only allocate the Add-profile / Manage-profiles dialogs when multi-
     // account is enabled. The Profiles menu entries that trigger them are
     // themselves gated on the same flag, so with the flag off these objects

@@ -15,13 +15,6 @@ const {
 } = require("electron");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const CustomBackground = require("./customBackground");
-const CustomStickers = require("./customStickers");
-const { MQTTClient } = require("./mqtt");
-const MQTTMediaStatusService = require("./mqtt/mediaStatusService");
-const HomeAssistantDiscovery = require("./mqtt/homeAssistantDiscovery");
-const GraphApiClient = require("./graphApi");
-const { registerGraphApiHandlers } = require("./graphApi/ipcHandlers");
 const { allowedChannels } = require("./security/ipcValidator");
 const { registerFeatureIpc } = require("./security/featureIpc");
 const { installIpcSecurity } = require("./security/ipcSecurity");
@@ -32,8 +25,6 @@ const CommandLineManager = require("./startup/commandLine");
 const NotificationService = require("./notifications/service");
 const CustomNotificationManager = require("./notificationSystem");
 const DownloadManager = require("./downloadManager");
-const QuickChatManager = require("./quickChat");
-const ScreenSharingService = require("./screenSharing/service");
 const PartitionsManager = require("./partitions/manager");
 const ProfilesManager = require("./profilesManager");
 const ProfileViewManager = require("./mainAppWindow/profileViewManager");
@@ -144,7 +135,9 @@ const notificationService = new NotificationService(
   getUserStatus
 );
 
-const screenSharingService = product.features.screenSharing ? new ScreenSharingService() : null;
+const screenSharingService = product.features.screenSharing
+  ? new (require('./screenSharing/service'))()
+  : null;
 
 const partitionsManager = new PartitionsManager(appConfig.settingsStore);
 
@@ -460,6 +453,10 @@ function handleShortcutCommand({ action, shortcut }) {
 }
 
 function initializeMqtt() {
+  const { MQTTClient } = require('./mqtt');
+  const MQTTMediaStatusService = require('./mqtt/mediaStatusService');
+  const HomeAssistantDiscovery = require('./mqtt/homeAssistantDiscovery');
+
   mqttClient = new MQTTClient(config);
 
   app.on('teams-microphone-control-changed', (state) => {
@@ -621,6 +618,7 @@ function loadMenuToggleSettings() {
 function initializeGraphApiClient() {
   if (!config.graphApi?.enabled) return;
 
+  const GraphApiClient = require('./graphApi');
   graphApiClient = new GraphApiClient(config);
   const mainWindow = mainAppWindow.getWindow();
   if (mainWindow) {
@@ -635,6 +633,7 @@ function initializeQuickChat() {
   const mainWindow = mainAppWindow.getWindow();
   if (!mainWindow) return;
 
+  const QuickChatManager = require('./quickChat');
   quickChatManager = new QuickChatManager(config, mainWindow);
   quickChatManager.initialize();
   mainAppWindow.setQuickChatManager(quickChatManager);
@@ -690,15 +689,19 @@ async function handleAppReady() {
 
     loadMenuToggleSettings();
 
-    const customBackground = product.features.customBackgrounds
-      ? new CustomBackground(app, config)
-      : null;
-    customBackground?.initialize();
+    let customBackground = null;
+    if (product.features.customBackgrounds) {
+      const CustomBackground = require('./customBackground');
+      customBackground = new CustomBackground(app, config);
+      customBackground.initialize();
+    }
 
-    const customStickers = product.features.customStickers
-      ? new CustomStickers(app, config)
-      : null;
-    customStickers?.initialize();
+    let customStickers = null;
+    if (product.features.customStickers) {
+      const CustomStickers = require('./customStickers');
+      customStickers = new CustomStickers(app, config);
+      customStickers.initialize();
+    }
 
     // Smartcard / NSS client-certificate PIN dialog (Linux only, issue #2639).
     // Registered before the main window loads so the handler exists before the
@@ -745,6 +748,7 @@ async function handleAppReady() {
 
     if (product.features.teamsAutomation) {
       initializeGraphApiClient();
+      const { registerGraphApiHandlers } = require('./graphApi/ipcHandlers');
       registerGraphApiHandlers(ipcMain, graphApiClient);
       initializeQuickChat();
     }
