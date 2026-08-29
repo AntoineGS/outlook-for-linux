@@ -88,6 +88,7 @@
       "!.superpowers{,/**/*}",
       "!docs/superpowers/plans{,/**/*}",
       "!docs/superpowers/specs{,/**/*}",
+      "!docs/superpowers/reports{,/**/*}",
       "!test-results{,/**/*}",
       "!playwright-report{,/**/*}"
     ],

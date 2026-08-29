@@ -30,4 +30,4 @@ function init(_config, rootDocument = globalThis.document) {
   return true;
 }
 
-module.exports = { init };
+module.exports = { AD_SUPPRESSION_CSS, STYLE_ID, init };

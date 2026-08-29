@@ -9,7 +9,12 @@ const { join } = require('node:path');
 const ROOT = join(__dirname, '..', '..');
 const preloadSource = readFileSync(join(ROOT, 'app', 'browser', 'preload.js'), 'utf8');
 const appSource = readFileSync(join(ROOT, 'app', 'index.js'), 'utf8');
+const mainWindowSource = readFileSync(join(ROOT, 'app', 'mainAppWindow', 'index.js'), 'utf8');
 const menuSource = readFileSync(join(ROOT, 'app', 'menus', 'appMenu.js'), 'utf8');
+
+const addEventHandlersMatch = mainWindowSource.match(
+  /function addEventHandlers\(\) \{([\s\S]*?)\n\}\n\nfunction getWebRequestFilterFromURL/,
+);
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
@@ -19,6 +24,33 @@ function declaredModules(source) {
   const match = source.match(/const\s+modules\s*=\s*\[([\s\S]*?)\];/);
   assert.ok(match, 'preload modules array should remain a literal');
   return [...match[1].matchAll(/name:\s*["']([^"']+)["']/g)].map(([, name]) => name);
+}
+
+function createRootFinishLoadHandler() {
+  const match = mainWindowSource.match(
+    /function onDidFinishLoad\(\) \{([\s\S]*?)\n\}\n\nfunction injectScreenSharingLogic/,
+  );
+  assert.ok(match, 'root did-finish-load handler should remain a named function');
+  return new Function(
+    'window',
+    'config',
+    'product',
+    'applyOutlookAdCss',
+    'customCSS',
+    'initSystemThemeFollow',
+    match[1],
+  );
+}
+
+function createRootFrameFinishLoadHandler() {
+  const match = mainWindowSource.match(
+    /function onDidFrameFinishLoad\(\s*event,\s*isMainFrame,\s*frameProcessId,\s*frameRoutingId\s*\) \{([\s\S]*?)\n\}/,
+  );
+  assert.ok(match, 'root did-frame-finish-load handler should remain a named function');
+  return new Function(
+    'event', 'isMainFrame', 'frameProcessId', 'frameRoutingId',
+    'webFrameMain', 'customCSS', 'applyOutlookAdCss', 'config', match[1],
+  );
 }
 
 describe('Outlook runtime boundary', () => {
@@ -32,8 +64,7 @@ describe('Outlook runtime boundary', () => {
        'webauthnOverride',
        'navigationButtons',
        'framelessTweaks',
-       'outlookAdSuppressor',
-     ]) {
+    ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
     }
 
@@ -54,6 +85,119 @@ describe('Outlook runtime boundary', () => {
     ]) {
       assert.ok(!modules.includes(name), `Teams-only module ${name} must not load`);
     }
+  });
+
+  it('does not own ad suppression in preload', () => {
+    assert.doesNotMatch(preloadSource, /outlookAdSuppressor/);
+  });
+
+  it('does not let did-finish-load own native ad CSS', () => {
+    let adCssApplications = 0;
+    const handler = createRootFinishLoadHandler();
+    const window = {
+      webContents: {
+        getURL: () => 'https://outlook.live.com/mail/',
+        executeJavaScript: async () => undefined,
+      },
+    };
+    const product = { features: { screenSharing: false } };
+    const customCSS = {
+      onDidFinishLoad: () => {},
+    };
+
+    handler(
+      window,
+      {},
+      product,
+      undefined,
+      customCSS,
+      () => {},
+    );
+    handler(
+      window,
+      {},
+      product,
+      undefined,
+      customCSS,
+      () => {},
+    );
+
+    assert.equal(adCssApplications, 0);
+  });
+
+  it('registers the root did-finish-load handler with addEventHandlers', () => {
+    assert.ok(addEventHandlersMatch, 'addEventHandlers should remain a named function');
+    assert.match(addEventHandlersMatch[1], /window\.webContents\.on\("did-finish-load", onDidFinishLoad\)/);
+    assert.match(addEventHandlersMatch[1], /window\.webContents\.on\("did-frame-finish-load", onDidFrameFinishLoad\)/);
+  });
+
+  it('does not apply native CSS on a non-HTTPS root load', () => {
+    let adCssApplications = 0;
+    const handler = createRootFinishLoadHandler();
+    const window = {
+      webContents: {
+        getURL: () => 'chrome-error://chromewebdata/',
+        executeJavaScript: async () => undefined,
+      },
+    };
+
+    handler(window, {}, { features: { screenSharing: false } }, undefined,
+      { onDidFinishLoad: () => {} }, () => {});
+
+    assert.equal(adCssApplications, 0);
+  });
+
+  it('injects only the main frame resolved with the exact Electron frame arguments', () => {
+    let adCssApplications = 0;
+    const frame = { url: 'https://outlook.office.com/' };
+    const calls = [];
+    const webFrameMain = { fromId: (...args) => { calls.push(args); return frame; } };
+    const customCSS = { onDidFrameFinishLoad: () => { throw new Error('must not run for main frame'); } };
+    let adFrame;
+    const adCss = async (receivedFrame) => { adFrame = receivedFrame; adCssApplications++; };
+    const handler = createRootFrameFinishLoadHandler();
+
+    handler({ type: 'event' }, true, 12, 34, webFrameMain, customCSS, adCss, {});
+
+    assert.deepEqual(calls, [[12, 34]]);
+    assert.equal(adCssApplications, 1);
+    assert.equal(adFrame, frame);
+  });
+
+  it('does not apply ad CSS to non-main frames', () => {
+    let adCssApplications = 0;
+    let customCssApplications = 0;
+    const handler = createRootFrameFinishLoadHandler();
+    const webFrameMain = { fromId: () => ({}) };
+
+    handler({}, false, 12, 34, webFrameMain, {
+      onDidFrameFinishLoad: () => { customCssApplications++; },
+    }, async () => { adCssApplications++; }, {});
+
+    assert.equal(adCssApplications, 0);
+    assert.equal(customCssApplications, 1);
+  });
+
+  it('contains ad CSS rejections and permits later attempts', async () => {
+    const handler = createRootFrameFinishLoadHandler();
+    const webFrameMain = { fromId: () => ({}) };
+    let adCssApplications = 0;
+    const unhandled = [];
+    const onUnhandledRejection = (reason) => unhandled.push(reason);
+    process.once('unhandledRejection', onUnhandledRejection);
+
+    handler({}, true, 12, 34, webFrameMain, {}, async () => {
+      throw new Error('ad CSS failed');
+    }, {});
+    handler({}, true, 12, 34, webFrameMain, {}, async () => {
+      adCssApplications++;
+    }, {});
+    await Promise.resolve();
+    await Promise.resolve();
+
+    process.removeListener('unhandledRejection', onUnhandledRejection);
+    assert.deepEqual(unhandled, []);
+    assert.equal(adCssApplications, 1);
   });
 
   it('does not start activity tracking or Teams-only main services', () => {
