@@ -4,7 +4,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const product = require("../../app/product");
 const pkg = require("../../package.json");
+const lock = require("../../package-lock.json");
+const releaseManifest = require("../../.release-please-manifest.json");
 const { generateDebianChangelog } = require("../../scripts/generateDebianChangelog");
+const { generateReleaseInfo } = require("../../scripts/generateReleaseInfo");
 
 const root = path.join(__dirname, "..", "..");
 const readText = (relativePath) =>
@@ -37,6 +40,22 @@ describe("Outlook product contract", () => {
 
   it("uses Outlook mail and productivity package keywords", () => {
     assert.deepEqual(pkg.keywords, ["Outlook", "email", "calendar", "productivity"]);
+  });
+
+  it("uses one Outlook 2.0.0 release baseline across every version source", async () => {
+    const appdata = readText("io.github.AntoineGS.outlook_for_linux.appdata.xml");
+    const releases = [...appdata.matchAll(/<release version="([^"]+)" date="([^"]+)">/g)];
+
+    assert.equal(pkg.version, "2.0.0");
+    assert.equal(lock.version, "2.0.0");
+    assert.equal(lock.packages[""].version, "2.0.0");
+    assert.equal(releaseManifest["."], "2.0.0");
+    assert.deepEqual(releases.map(([, version]) => version), ["2.0.0"]);
+
+    const { releaseInfo } = await generateReleaseInfo(root);
+    assert.equal(releaseInfo.releaseName, "2.0.0");
+    assert.match(releaseInfo.releaseNotes, /Outlook for Linux/i);
+    assert.doesNotMatch(releaseInfo.releaseNotes, /Electron version upgrade to 28\.0\.0/);
   });
 
   it("does not enable Teams-only integrations", () => {
