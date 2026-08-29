@@ -20,8 +20,12 @@ function isApprovedRendererSource(sourceUrl) {
   }
 
   try {
-    const hostname = new URL(sourceUrl).hostname;
-    return product.isAppHost(hostname) || product.isAuthHost(hostname);
+    const url = new URL(sourceUrl);
+    return url.protocol === "https:"
+      && url.port === ""
+      && !url.username
+      && !url.password
+      && (product.isAppHost(url.hostname) || product.isAuthHost(url.hostname));
   } catch {
     return false;
   }
