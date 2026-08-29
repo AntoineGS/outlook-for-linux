@@ -54,7 +54,13 @@ describe("Outlook product contract", () => {
 
     const { releaseInfo } = await generateReleaseInfo(root);
     assert.equal(releaseInfo.releaseName, "2.0.0");
-    assert.match(releaseInfo.releaseNotes, /Outlook for Linux/i);
+    assert.equal(releaseInfo.releaseDate, "2026-08-29");
+    assert.deepEqual(releaseInfo.releaseNotes.split("\n"), [
+      "• Initial Outlook for Linux 2.0 release based on the Teams for Linux Electron wrapper.",
+      "• Provides Outlook desktop integration, notifications, multi-account profiles, and secure Microsoft sign-in support.",
+      "• Adds opt-in Vim mailbox navigation and rich-text message editing.",
+      "• Removes Teams-only runtime behavior and hardens Outlook product boundaries.",
+    ]);
     assert.doesNotMatch(releaseInfo.releaseNotes, /Electron version upgrade to 28\.0\.0/);
   });
 

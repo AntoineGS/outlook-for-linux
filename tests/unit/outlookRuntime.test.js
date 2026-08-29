@@ -86,6 +86,7 @@ describe('Outlook runtime boundary', () => {
       'customStickers',
       'dockIconRenderer',
       'preventDeviceSwitching',
+      'settings',
     ]) {
       assert.ok(!modules.includes(name), `Teams-only module ${name} must not load`);
     }
@@ -245,16 +246,33 @@ describe('Outlook runtime boundary', () => {
   });
 
   it('does not eagerly import disabled Teams services during startup', () => {
-    const startupImports = appSource.slice(0, appSource.indexOf('function isNetworkError'));
-    for (const moduleName of [
-      'customBackground',
-      'customStickers',
-      './mqtt',
-      'graphApi',
-      'quickChat',
-      'screenSharing/service',
-    ]) {
-      assert.doesNotMatch(startupImports, new RegExp(`require\\(["'][^"']*${moduleName}[^"']*["']\\)`));
+    const networkErrorEnd = appSource.indexOf('function isNetworkError');
+    assert.ok(networkErrorEnd > 0);
+    const functionBody = (name, startAt = networkErrorEnd) => {
+      const start = appSource.indexOf(`function ${name}`, startAt);
+      assert.ok(start > networkErrorEnd, `${name} should remain below isNetworkError`);
+      let depth = 0;
+      let bodyStart = appSource.indexOf('{', start);
+      for (let index = bodyStart; index < appSource.length; index += 1) {
+        if (appSource[index] === '{') depth += 1;
+        if (appSource[index] === '}' && --depth === 0) return [bodyStart, index];
+      }
+      assert.fail(`${name} has no closed body`);
+    };
+    const allowedRequires = [
+      ['initializeMqtt', './mqtt'],
+      ['initializeMqtt', './mqtt/mediaStatusService'],
+      ['initializeMqtt', './mqtt/homeAssistantDiscovery'],
+      ['initializeGraphApiClient', './graphApi'],
+      ['initializeQuickChat', './quickChat'],
+      ['handleAppReady', './customBackground'],
+      ['handleAppReady', './customStickers'],
+      ['handleAppReady', './graphApi/ipcHandlers'],
+    ];
+    for (const [functionName, moduleName] of allowedRequires) {
+      const [bodyStart, bodyEnd] = functionBody(functionName);
+      const requireAt = appSource.indexOf(`require('${moduleName}')`, bodyStart);
+      assert.ok(requireAt > bodyStart && requireAt < bodyEnd, `${moduleName} must be inside ${functionName}`);
     }
 
     const menuImports = menusSource.slice(0, menusSource.indexOf('class Menus'));

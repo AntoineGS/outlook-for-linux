@@ -12,7 +12,7 @@
 # is guaranteed to be compatible between login and test runs.
 set -e
 
-SESSION_DIR="/home/tester/.config/teams-for-linux"
+SESSION_DIR="/home/tester/.config/outlook-for-linux"
 SRC_DIR="/src"
 readonly SEPARATOR="============================================="
 
@@ -237,7 +237,7 @@ if [[ "$MODE" == "login" ]]; then
         sleep 3
         echo "[*] Session saved to ${SESSION_DIR}"
         ls -la "${SESSION_DIR}/" 2>/dev/null | head -10
-        ls -la "${SESSION_DIR}/Partitions/teams-4-linux/" 2>/dev/null | head -5
+        ls -la "${SESSION_DIR}/Partitions/outlook-4-linux/" 2>/dev/null | head -5
         kill $DISPLAY_PID 2>/dev/null
         kill ${NOVNC_PID:-0} ${WAYVNC_PID:-0} 2>/dev/null
         return 0

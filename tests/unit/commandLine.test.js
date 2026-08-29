@@ -16,13 +16,13 @@ const originalSessionType = process.env.XDG_SESSION_TYPE;
 // Run CommandLineManager.addSwitchesAfterConfigLoad under a mocked Electron
 // `app.commandLine`, forced platform and arch, returning the list of switches
 // the manager appended as [name, value] pairs.
-function appendedSwitches(config, platform = 'darwin', arch = 'arm64', screenSharing = false) {
+function appendedSwitches(config, platform = 'darwin', arch = 'arm64', screenSharing = false, ozonePlatform = '') {
   const switches = [];
   const app = {
     commandLine: {
       appendSwitch: (name, value) => switches.push([name, value]),
       hasSwitch: () => false,
-      getSwitchValue: () => '',
+      getSwitchValue: (name) => name === 'ozone-platform' ? ozonePlatform : '',
     },
     setName: () => {},
     setDesktopName: () => {},
@@ -158,5 +158,26 @@ describe('CommandLineManager macOS performance gate', () => {
     assert.ok(hasSwitch(withScreenSharing, 'use-fake-ui-for-media-stream'));
     assert.match(switchValue(withScreenSharing, 'enable-features'), /WebRTCPipeWireCapturer/);
     assert.ok(hasSwitch(withScreenSharing, 'disable-gpu'));
+  });
+
+  it('keeps GPU and fake-media behavior correct for XWayland with screen sharing', () => {
+    process.env.XDG_SESSION_TYPE = 'wayland';
+    const switches = appendedSwitches(
+      { authServerWhitelist: '*', wayland: { xwaylandOptimizations: true } },
+      'linux', 'x64', true, 'x11',
+    );
+    assert.ok(!hasSwitch(switches, 'disable-gpu'));
+    assert.ok(!hasSwitch(switches, 'use-fake-ui-for-media-stream'));
+    assert.ok(hasSwitch(switches, 'enable-features'));
+  });
+
+  it('keeps GPU and fake-media behavior correct for XWayland without screen sharing', () => {
+    process.env.XDG_SESSION_TYPE = 'wayland';
+    const switches = appendedSwitches(
+      { authServerWhitelist: '*', wayland: { xwaylandOptimizations: true } },
+      'linux', 'x64', false, 'x11',
+    );
+    assert.ok(!hasSwitch(switches, 'disable-gpu'));
+    assert.ok(!hasSwitch(switches, 'use-fake-ui-for-media-stream'));
   });
 });

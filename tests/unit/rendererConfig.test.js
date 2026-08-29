@@ -38,6 +38,9 @@ test('projects only configuration consumed by Outlook preload', () => {
   assert.doesNotMatch(JSON.stringify(projected), new RegExp(secret));
   assert.notEqual(projected.notifications, source.notifications);
   assert.notEqual(projected.auth, source.auth);
+  assert.notEqual(projected.auth.webauthn, source.auth.webauthn);
+  projected.auth.webauthn.enabled = false;
+  assert.equal(source.auth.webauthn.enabled, true);
 });
 
 test('handles absent nested configuration without spreading source objects', () => {
