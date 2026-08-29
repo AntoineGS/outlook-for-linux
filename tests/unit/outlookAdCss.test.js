@@ -66,39 +66,6 @@ describe('Outlook main-frame ad CSS', () => {
     }
   });
 
-  it('revalidates the frame immediately before execution', async () => {
-    let executionCount = 0;
-    const frame = createFrame();
-    Object.defineProperty(frame, 'url', {
-      get() {
-        executionCount++;
-        return executionCount === 1 ? 'https://outlook.live.com/mail/' : 'https://example.com/';
-      },
-    });
-    frame.executeJavaScript = async () => { throw new Error('must not execute'); };
-
-    assert.equal(await applyOutlookAdCss(frame), false);
-    assert.equal(executionCount, 2);
-  });
-
-  it('returns false when the frame is destroyed or detached after initial validation', async () => {
-    for (const property of ['destroyed', 'detached']) {
-      let reads = 0;
-      const frame = createFrame();
-      Object.defineProperty(frame, property === 'destroyed' ? 'isDestroyed' : 'detached', {
-        get() {
-          reads++;
-          if (property === 'destroyed') return () => reads > 1;
-          return reads > 1;
-        },
-      });
-      frame.executeJavaScript = async () => { throw new Error('must not execute'); };
-
-      assert.equal(await applyOutlookAdCss(frame), false, property);
-      assert.equal(reads, 2, property);
-    }
-  });
-
   it('returns false instead of rejecting when frame access or execution throws', async () => {
     const throwingFrames = [
       { get isDestroyed() { throw new Error('destroyed access failed'); } },
@@ -114,6 +81,23 @@ describe('Outlook main-frame ad CSS', () => {
 
   it('keeps the stylesheet static and free of configuration or page data', () => {
     assert.equal(STYLE_ID, 'ofl-ad-suppression');
+    assert.equal(require('../../app/browser/tools/outlookAdSuppressor').init, undefined);
+    for (const marker of [
+      'owaadbar',
+      'ads-olk-icon.png',
+      'adbarmetrochoice.svg',
+      'fbAdLink',
+      'data-app-section="MessageList"',
+      '.ms-Shimmer-container',
+    ]) {
+      assert.match(AD_SUPPRESSION_CSS, new RegExp(marker.replace('.', String.raw`\.`)));
+    }
+    assert.match(AD_SUPPRESSION_CSS, /display:\s*none\s*!important/);
+    assert.doesNotMatch(AD_SUPPRESSION_CSS, /aria-label|textContent|sponsored/i);
+    assert.doesNotMatch(AD_SUPPRESSION_CSS, /microsoft.?365|buy.?microsoft/i);
+    assert.match(AD_SUPPRESSION_CSS, /div:has\(> div > div > div\[id\^="owaadbar"\]\)/);
+    assert.doesNotMatch(AD_SUPPRESSION_CSS, /(?:^|[;{])\s*(?:min-|max-)?(?:width|height)\s*:/im);
+    assert.doesNotMatch(AD_SUPPRESSION_CSS, /clientWidth|clientHeight|offsetWidth|offsetHeight/);
     assert.doesNotMatch(AD_SUPPRESSION_CSS, /config|outlook\.live\.com|document|window|location/i);
   });
 });

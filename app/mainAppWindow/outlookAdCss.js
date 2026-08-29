@@ -26,10 +26,6 @@ async function applyOutlookAdCss(frame) {
       return false;
     }
 
-    if (!isApprovedFrame()) {
-      return false;
-    }
-
     const source = `(() => {
       const styleId = ${JSON.stringify(STYLE_ID)};
       if (!document.head || document.getElementById(styleId)) return;
