@@ -2,7 +2,9 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { isLoginUrl } = require('../../app/ssoPasswordPrefill/index');
+const { EventEmitter } = require('node:events');
+const vm = require('node:vm');
+const { attach, isLoginUrl } = require('../../app/ssoPasswordPrefill/index');
 
 // isLoginUrl is the gate that decides where the pre-fill injects a password,
 // so its host- and scheme-matching is security-relevant and covered here.
@@ -54,5 +56,82 @@ describe('ssoPasswordPrefill.isLoginUrl', () => {
     assert.strictEqual(isLoginUrl(''), false);
     assert.strictEqual(isLoginUrl(undefined), false);
     assert.strictEqual(isLoginUrl(null), false);
+  });
+});
+
+describe('ssoPasswordPrefill.attach', () => {
+  it('uses native button activation to submit the Microsoft email step', async () => {
+    let submitted = false;
+
+    class FakeInput {
+      constructor() {
+        this.offsetParent = {};
+        this.disabled = false;
+        this.readOnly = false;
+        this.value = '';
+      }
+
+      focus() {}
+      dispatchEvent() {}
+      getClientRects() { return [1]; }
+    }
+
+    const emailInput = new FakeInput();
+    const nextButton = {
+      offsetParent: {},
+      disabled: false,
+      readOnly: false,
+      focus() {},
+      getClientRects() { return [1]; },
+      dispatchEvent() {},
+      click() { submitted = true; },
+    };
+    const document = {
+      documentElement: {},
+      querySelector(selector) {
+        if (selector === '#tilesHolder') return null;
+        return null;
+      },
+      querySelectorAll(selector) {
+        if (selector.includes('input[type=email]')) return [emailInput];
+        if (selector.includes('#idSIButton9')) return [nextButton];
+        return [];
+      },
+    };
+    const window = { HTMLInputElement: FakeInput };
+    window.window = window;
+
+    const context = {
+      window,
+      document,
+      Event: class Event {},
+      MouseEvent: class MouseEvent {},
+      MutationObserver: class MutationObserver {
+        observe() {}
+        disconnect() {}
+      },
+      setInterval: () => 1,
+      clearInterval() {},
+      setTimeout: () => 2,
+      clearTimeout() {},
+    };
+    const frame = {
+      url: 'https://login.microsoftonline.com/common/oauth2/authorize',
+      executeJavaScript(script) {
+        return vm.runInNewContext(script, context);
+      },
+    };
+    const webContents = new EventEmitter();
+    webContents.mainFrame = { framesInSubtree: [frame] };
+
+    attach(
+      { webContents },
+      { auth: { webLogin: { user: 'person@example.com', autoSubmit: true } } },
+    );
+    webContents.emit('dom-ready');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.strictEqual(emailInput.value, 'person@example.com');
+    assert.strictEqual(submitted, true);
   });
 });
