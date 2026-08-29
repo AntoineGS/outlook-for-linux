@@ -248,16 +248,18 @@ describe('Outlook runtime boundary', () => {
   it('does not eagerly import disabled Teams services during startup', () => {
     const networkErrorEnd = appSource.indexOf('function isNetworkError');
     assert.ok(networkErrorEnd > 0);
+    const braceRange = (openAt) => {
+      let depth = 0;
+      for (let index = openAt; index < appSource.length; index += 1) {
+        if (appSource[index] === '{') depth += 1;
+        if (appSource[index] === '}' && --depth === 0) return [openAt, index];
+      }
+      assert.fail(`unclosed block at ${openAt}`);
+    };
     const functionBody = (name, startAt = networkErrorEnd) => {
       const start = appSource.indexOf(`function ${name}`, startAt);
       assert.ok(start > networkErrorEnd, `${name} should remain below isNetworkError`);
-      let depth = 0;
-      let bodyStart = appSource.indexOf('{', start);
-      for (let index = bodyStart; index < appSource.length; index += 1) {
-        if (appSource[index] === '{') depth += 1;
-        if (appSource[index] === '}' && --depth === 0) return [bodyStart, index];
-      }
-      assert.fail(`${name} has no closed body`);
+      return braceRange(appSource.indexOf('{', start));
     };
     const allowedRequires = [
       ['initializeMqtt', './mqtt'],
@@ -268,11 +270,29 @@ describe('Outlook runtime boundary', () => {
       ['handleAppReady', './customBackground'],
       ['handleAppReady', './customStickers'],
       ['handleAppReady', './graphApi/ipcHandlers'],
+      ['screenSharing', './screenSharing/service'],
     ];
+    const screenSharingConditionalStart = appSource.indexOf(
+      'const screenSharingService = product.features.screenSharing',
+    );
+    const screenSharingConditionalEnd = appSource.indexOf(';', screenSharingConditionalStart);
+    assert.ok(screenSharingConditionalStart > networkErrorEnd);
+    assert.ok(screenSharingConditionalEnd > screenSharingConditionalStart);
+    const allowedRanges = new Map([
+      ...allowedRequires.slice(0, -1).map(([functionName, moduleName]) => [
+        moduleName,
+        functionBody(functionName),
+      ]),
+      ['./screenSharing/service', [screenSharingConditionalStart, screenSharingConditionalEnd]],
+    ]);
     for (const [functionName, moduleName] of allowedRequires) {
-      const [bodyStart, bodyEnd] = functionBody(functionName);
-      const requireAt = appSource.indexOf(`require('${moduleName}')`, bodyStart);
-      assert.ok(requireAt > bodyStart && requireAt < bodyEnd, `${moduleName} must be inside ${functionName}`);
+      const occurrences = [];
+      const escapedModuleName = moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const requirePattern = new RegExp(`require\\(\\s*["']${escapedModuleName}["']\\s*\\)`, 'g');
+      for (const match of appSource.matchAll(requirePattern)) occurrences.push(match.index);
+      assert.equal(occurrences.length, 1, `${moduleName} must have exactly one require`);
+      const [bodyStart, bodyEnd] = allowedRanges.get(moduleName);
+      assert.ok(occurrences[0] > bodyStart && occurrences[0] < bodyEnd, `${moduleName} must be inside ${functionName}`);
     }
 
     const menuImports = menusSource.slice(0, menusSource.indexOf('class Menus'));

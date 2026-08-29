@@ -179,5 +179,7 @@ describe('CommandLineManager macOS performance gate', () => {
     );
     assert.ok(!hasSwitch(switches, 'disable-gpu'));
     assert.ok(!hasSwitch(switches, 'use-fake-ui-for-media-stream'));
+    assert.ok(!hasSwitch(switches, 'enable-features'));
+    assert.doesNotMatch(String(switchValue(switches, 'enable-features')), /WebRTCPipeWireCapturer/);
   });
 });
