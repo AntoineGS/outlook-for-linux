@@ -11,6 +11,7 @@ const preloadSource = readFileSync(join(ROOT, 'app', 'browser', 'preload.js'), '
 const appSource = readFileSync(join(ROOT, 'app', 'index.js'), 'utf8');
 const mainWindowSource = readFileSync(join(ROOT, 'app', 'mainAppWindow', 'index.js'), 'utf8');
 const menuSource = readFileSync(join(ROOT, 'app', 'menus', 'appMenu.js'), 'utf8');
+const menusSource = readFileSync(join(ROOT, 'app', 'menus', 'index.js'), 'utf8');
 
 const addEventHandlersMatch = mainWindowSource.match(
   /function addEventHandlers\(\) \{([\s\S]*?)\n\}\n\nfunction getWebRequestFilterFromURL/,
@@ -241,6 +242,24 @@ describe('Outlook runtime boundary', () => {
     assert.match(appSource, /product\.features\.screenSharing/);
     assert.match(appSource, /product\.features\.customBackgrounds/);
     assert.match(appSource, /product\.features\.customStickers/);
+  });
+
+  it('does not eagerly import disabled Teams services during startup', () => {
+    const startupImports = appSource.slice(0, appSource.indexOf('function isNetworkError'));
+    for (const moduleName of [
+      'customBackground',
+      'customStickers',
+      './mqtt',
+      'graphApi',
+      'quickChat',
+      'screenSharing/service',
+    ]) {
+      assert.doesNotMatch(startupImports, new RegExp(`require\\(["'][^"']*${moduleName}[^"']*["']\\)`));
+    }
+
+    const menuImports = menusSource.slice(0, menusSource.indexOf('class Menus'));
+    assert.doesNotMatch(menuImports, /joinMeetingDialog/);
+    assert.doesNotMatch(menuImports, /require\(["']\.\/settings["']\)/);
   });
 
   it('does not register a session-wide frame preload', () => {
