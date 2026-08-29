@@ -440,6 +440,48 @@ test('uses exact diff endpoints for native Backspace and Delete records', () => 
 	}
 });
 
+test('reports multiline native deletion endpoints in the pre-input document', () => {
+	const fixture = createFixture({ text: 'a\nb', anchor: 2, head: 2 });
+	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });
+	const changes = [];
+	adapter.on('change', change => changes.push(change));
+	fixture.listeners.get('beforeinput')?.forEach(listener => listener({
+		type: 'beforeinput', inputType: 'deleteContentForward', data: null,
+	}));
+	fixture.setText('ab');
+	fixture.root.innerHTML = '<b>ab</b>';
+	fixture.listeners.get('input')?.forEach(listener => listener({
+		type: 'input', inputType: 'deleteContentForward', data: null,
+	}));
+	assert.deepEqual(changes, [{
+		from: { line: 0, ch: 1 },
+		to: { line: 1, ch: 0 },
+		text: [''],
+		origin: '+input',
+	}]);
+});
+
+test('reports multiline native replacement endpoints in the pre-input document', () => {
+	const fixture = createFixture({ text: 'ab\ncd', anchor: 1, head: 4 });
+	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });
+	const changes = [];
+	adapter.on('change', change => changes.push(change));
+	fixture.listeners.get('beforeinput')?.forEach(listener => listener({
+		type: 'beforeinput', inputType: 'insertText', data: 'X',
+	}));
+	fixture.setText('aXd');
+	fixture.root.innerHTML = '<b>aXd</b>';
+	fixture.listeners.get('input')?.forEach(listener => listener({
+		type: 'input', inputType: 'insertText', data: 'X',
+	}));
+	assert.deepEqual(changes, [{
+		from: { line: 0, ch: 1 },
+		to: { line: 1, ch: 1 },
+		text: ['X'],
+		origin: '+input',
+	}]);
+});
+
 test('records the actual newline diff when Enter provides null event data', () => {
 	const fixture = createFixture({ text: 'ab', anchor: 1, head: 1 });
 	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });

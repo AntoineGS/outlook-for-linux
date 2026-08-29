@@ -70,8 +70,8 @@ function createRichTextVimAdapter(root, options = {}) {
 	const boundaries = () => transaction?.virtual ? [...transaction.virtual.boundaries].sort((a, b) => a - b) :
 		[...map().graphemeBoundaries].sort((a, b) => a - b);
 	const isBoundary = offset => transaction?.virtual ? transaction.virtual.boundaries.has(offset) : map().graphemeBoundaries.has(offset);
-	const posFromOffset = offset => {
-		const lines = logicalText().split('\n');
+	const posFromOffset = (offset, text = logicalText()) => {
+		const lines = text.split('\n');
 		let line = 0;
 		let remaining = offset;
 		while (line < lines.length - 1 && remaining > lines[line].length) {
@@ -238,8 +238,8 @@ function createRichTextVimAdapter(root, options = {}) {
 		const inputType = before.inputType;
 		const origin = inputType === 'historyUndo' ? '*undo' : inputType === 'historyRedo' ? '*redo' : '+input';
 		adapter?.signal('change', adapter, {
-			from: posFromOffset(from),
-			to: posFromOffset(to),
+			from: posFromOffset(from, before.text),
+			to: posFromOffset(to, before.text),
 			text: inputType?.startsWith('delete') ? [''] : [inserted],
 			origin,
 		});
