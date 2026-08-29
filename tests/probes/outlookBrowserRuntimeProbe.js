@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { readFile } = require('node:fs/promises');
 const { join } = require('node:path');
 const { app, BrowserWindow } = require('electron');
+const { AD_SUPPRESSION_CSS } = require('../../app/browser/tools/outlookAdSuppressor');
 
 const RUNTIME_FILE = join(process.cwd(), 'app', 'browser', 'generated', 'outlookBrowserRuntime.js');
 const RUNTIME_CONFIG = {
@@ -26,11 +27,27 @@ const COMPOSER_HTML = `<!doctype html>
   </div>
 </body></html>`;
 
+const AD_LAYOUT_HTML = `<!doctype html>
+<html><head><style>
+  #container { display: flex; flex-direction: column; height: 200px; width: 320px; }
+  #content { flex: 1 1 auto; min-height: 0; }
+  #ad-slot { flex: 0 0 auto; height: 95px; }
+</style></head><body>
+  <div id="container">
+    <div id="content"></div>
+    <div id="ad-slot"><div><div id="direct-marker-parent"><div id="owaadbar-test"></div></div></div></div>
+  </div>
+</body></html>`;
+
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function main() {
   await app.whenReady();
   const window = new BrowserWindow({
+    show: false,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+  });
+  const adWindow = new BrowserWindow({
     show: false,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
   });
@@ -57,8 +74,28 @@ async function main() {
     assert.equal(state.initialized, true);
     assert.equal(state.badges.length, 1);
     assert.equal(state.badges[0], 'NORMAL');
+
+    await adWindow.loadURL(`data:text/html,${encodeURIComponent(AD_LAYOUT_HTML)}`);
+    const initialAdLayout = await adWindow.webContents.executeJavaScript(`({
+      slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
+      contentHeight: document.querySelector('#content').getBoundingClientRect().height,
+    })`);
+    assert.equal(initialAdLayout.slotHeight, 95);
+    assert.equal(initialAdLayout.contentHeight, 105);
+    await adWindow.webContents.executeJavaScript(`(() => {
+      const style = document.createElement('style');
+      style.textContent = ${JSON.stringify(AD_SUPPRESSION_CSS)};
+      document.head.appendChild(style);
+    })()`);
+    const adLayout = await adWindow.webContents.executeJavaScript(`({
+      slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
+      contentHeight: document.querySelector('#content').getBoundingClientRect().height,
+    })`);
+    assert.equal(adLayout.slotHeight, 0);
+    assert.equal(adLayout.contentHeight - initialAdLayout.contentHeight, 95);
   } finally {
     window.destroy();
+    adWindow.destroy();
     await app.quit();
   }
 }
