@@ -356,12 +356,27 @@ describe('Outlook runtime boundary', () => {
   });
 
   it('does not expose Teams-only menu entries', () => {
-    assert.match(
-      menuSource,
-      /\.\.\.\(product\.features\.settingsBackup\s*\?\s*\[getSettingsMenu\(Menus\)\]\s*:\s*\[\]\)/,
-    );
     for (const label of ['Join Meeting', 'Return to Teams', 'Quick Chat', 'Video']) {
       assert.doesNotMatch(menuSource, new RegExp(`label:\s*["']${label}["']`));
     }
+  });
+
+  it('keeps config migration available while hiding Teams settings backup', () => {
+    const buildAppMenu = require('../../app/menus/appMenu');
+    const menu = buildAppMenu({
+      configGroup: {
+        startupConfig: {
+          appIcon: '',
+          multiAccount: { enabled: false },
+        },
+      },
+    });
+    const settings = menu.submenu.find((item) => item.label === 'Settings');
+
+    assert.ok(settings);
+    assert.deepEqual(
+      settings.submenu.filter((item) => item.label).map((item) => item.label),
+      ['Show Updated Config…'],
+    );
   });
 });

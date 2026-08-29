@@ -110,3 +110,36 @@ describe('ProfilesManager Outlook legacy bootstrap', () => {
     assert.doesNotMatch(profile.partition, /teams/i);
   });
 });
+
+// Phase 2 foundation: SenderProfileMap resolves the root window through this
+// accessor, so it must be null before bootstrap and the Profile 0 record after.
+describe('ProfilesManager getLegacyProfile', () => {
+  it('returns null before the legacy profile is bootstrapped', () => {
+    const pm = new ProfilesManager(makeStore());
+    pm.add({ name: 'Regular' });
+    assert.strictEqual(pm.getLegacyProfile(), null);
+  });
+
+  it('returns the bootstrapped Profile 0 record', () => {
+    const pm = new ProfilesManager(makeStore());
+    const bootstrapped = pm.bootstrapLegacyProfile('My account');
+    const legacy = pm.getLegacyProfile();
+    assert.strictEqual(legacy.id, bootstrapped.id);
+    assert.strictEqual(legacy.partition, product.partition);
+  });
+
+  it('does not confuse regular partitions with the legacy one', () => {
+    const pm = new ProfilesManager(makeStore());
+    pm.add({ name: 'Regular' });
+    pm.bootstrapLegacyProfile('My account');
+    assert.strictEqual(pm.getLegacyProfile().name, 'My account');
+  });
+
+  it('returns null again after Profile 0 is removed', () => {
+    const pm = new ProfilesManager(makeStore());
+    const bootstrapped = pm.bootstrapLegacyProfile('My account');
+    pm.add({ name: 'Regular' });
+    pm.remove(bootstrapped.id);
+    assert.strictEqual(pm.getLegacyProfile(), null);
+  });
+});

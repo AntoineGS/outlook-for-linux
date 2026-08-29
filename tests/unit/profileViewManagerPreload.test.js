@@ -105,6 +105,7 @@ test('configures the direct preload on profile Outlook views', async () => {
 		url: 'https://outlook.live.com/mail/',
 	}];
 	profilesManager.getActive = () => null;
+	profilesManager.getLegacyProfile = () => null;
 	const manager = new ProfileViewManager(window, profilesManager, {
 		url: 'https://outlook.live.com/mail/',
 		chromeUserAgent: 'test-agent',
