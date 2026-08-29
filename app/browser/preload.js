@@ -361,7 +361,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
       { name: "navigationButtons", path: "./tools/navigationButtons" },
-      { name: "framelessTweaks", path: "./tools/frameless" }
+      { name: "framelessTweaks", path: "./tools/frameless" },
+      { name: "vimBindings", path: "./tools/vimBindings" },
+      { name: "outlookAdSuppressor", path: "./tools/outlookAdSuppressor" },
     ];
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
@@ -371,7 +373,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     for (const module of modules) {
       try {
         const moduleInstance = require(module.path);
-        if (modulesRequiringIpc.has(module.name)) {
+        if (module.name === "vimBindings") {
+          const controller = moduleInstance.createVimBindings({
+            document: globalThis.document,
+            MutationObserverClass: globalThis.MutationObserver,
+            manageFrames: false,
+          });
+          controller.init(config);
+          globalThis.addEventListener("pagehide", () => controller.destroy(), {
+            once: true,
+          });
+        } else if (modulesRequiringIpc.has(module.name)) {
           moduleInstance.init(config, ipcRenderer);
         } else {
           moduleInstance.init(config);

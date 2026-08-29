@@ -2,13 +2,12 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { join } = require('node:path');
 
 const ROOT = join(__dirname, '..', '..');
 const preloadSource = readFileSync(join(ROOT, 'app', 'browser', 'preload.js'), 'utf8');
-const browserRuntimeSource = readFileSync(join(ROOT, 'app', 'browser', 'outlookBrowserRuntime.js'), 'utf8');
 const appSource = readFileSync(join(ROOT, 'app', 'index.js'), 'utf8');
 const mainWindowSource = readFileSync(join(ROOT, 'app', 'mainAppWindow', 'index.js'), 'utf8');
 const menuSource = readFileSync(join(ROOT, 'app', 'menus', 'appMenu.js'), 'utf8');
@@ -31,10 +30,12 @@ describe('Outlook runtime boundary', () => {
       'shortcuts',
       'settings',
       'emulatePlatform',
-      'webauthnOverride',
-      'navigationButtons',
-      'framelessTweaks',
-    ]) {
+       'webauthnOverride',
+       'navigationButtons',
+       'framelessTweaks',
+       'vimBindings',
+       'outlookAdSuppressor',
+     ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
     }
 
@@ -52,8 +53,6 @@ describe('Outlook runtime boundary', () => {
       'customStickers',
       'dockIconRenderer',
       'preventDeviceSwitching',
-      'vimBindings',
-      'outlookAdSuppressor',
     ]) {
       assert.ok(!modules.includes(name), `Teams-only module ${name} must not load`);
     }
@@ -65,18 +64,21 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
-  it('owns Vim and ad lifecycle in the injected browser runtime', () => {
-    assert.doesNotMatch(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
-    assert.match(browserRuntimeSource, /outlookAdSuppressor\.init\(__OFL_CONFIG__\)/);
-    assert.match(browserRuntimeSource, /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document/);
-    assert.match(browserRuntimeSource, /addEventListener\(['"]pagehide['"][\s\S]*?vimController\.destroy\(\)/);
+  it('creates a Vim controller for each preload document', () => {
+    assert.match(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
+    assert.match(
+      preloadSource,
+      /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document[\s\S]*?MutationObserverClass:\s*globalThis\.MutationObserver[\s\S]*?manageFrames:\s*false/,
+    );
+    assert.match(
+      preloadSource,
+      /addEventListener\(["']pagehide["'][\s\S]*?controller\.destroy\(\)/,
+    );
   });
 
-  it('injects the browser runtime after approved Outlook documents load', () => {
-    assert.match(mainWindowSource, /require\(['"]\.\/outlookBrowserRuntimeInjector['"]\)/);
-    assert.match(mainWindowSource, /function onDomReady\(\)[\s\S]*?scheduleOutlookBrowserRuntimeInjection\(window\.webContents, config\)/);
-    assert.match(mainWindowSource, /webContents\.on\(['"]dom-ready['"], onDomReady\)/);
-    assert.match(mainWindowSource, /onDidFrameFinishLoad[\s\S]*?scheduleOutlookBrowserRuntimeInjection\(window\.webContents, config\)/);
+  it('does not schedule a generalized Outlook browser runtime', () => {
+    assert.doesNotMatch(mainWindowSource, /outlookBrowserRuntimeInjector/);
+    assert.doesNotMatch(mainWindowSource, /scheduleOutlookBrowserRuntimeInjection/);
   });
 
   it('does not start activity tracking or Teams-only main services', () => {
@@ -84,6 +86,41 @@ describe('Outlook runtime boundary', () => {
     assert.match(appSource, /product\.features\.screenSharing/);
     assert.match(appSource, /product\.features\.customBackgrounds/);
     assert.match(appSource, /product\.features\.customStickers/);
+  });
+
+  it('does not register a session-wide frame preload', () => {
+    assert.equal(
+      existsSync(join(ROOT, 'app', 'mainAppWindow', 'browserPreloadSession.js')),
+      false,
+    );
+    assert.equal(
+      existsSync(join(ROOT, 'app', 'browser', 'sessionPreload.js')),
+      false,
+    );
+  });
+
+  it('does not retain the obsolete browser runtime bundle pipeline', () => {
+    for (const relativePath of [
+      'app/browser/outlookBrowserRuntime.js',
+      'scripts/buildOutlookBrowserRuntime.js',
+      'tests/unit/buildOutlookBrowserRuntime.test.js',
+    ]) {
+      assert.equal(existsSync(join(ROOT, relativePath)), false, `${relativePath} must be deleted`);
+    }
+
+    const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+    assert.equal(packageJson.devDependencies.esbuild, undefined);
+    for (const scriptName of [
+      'build:outlook-runtime',
+      'pretest:e2e',
+      'pretest:authenticated',
+      'prestart:dev',
+      'prepack',
+    ]) {
+      assert.equal(packageJson.scripts[scriptName], undefined, `${scriptName} must be absent`);
+    }
+    assert.equal(packageJson.scripts.prestart, 'npm ci');
+    assert.equal(packageJson.build.beforePack, undefined);
   });
 
   it('keeps unread-count on the generic tray and badge APIs', () => {

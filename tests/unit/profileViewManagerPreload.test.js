@@ -2,11 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
-test('registers a profile session preload before constructing its Outlook view', () => {
-	const events = [];
+test('configures the direct preload on profile Outlook views', () => {
+	let preloadRegistrationCount = 0;
 	const profileSession = {
 		getPreloadScripts: () => [],
-		registerPreloadScript: () => events.push('register'),
+		registerPreloadScript: () => preloadRegistrationCount++,
 	};
 	let profileViewOptions;
 	let profileWebContents;
@@ -14,7 +14,6 @@ test('registers a profile session preload before constructing its Outlook view',
 		constructor(options) {
 			if (options.webPreferences.partition) {
 				profileViewOptions = options;
-				events.push('construct');
 			}
 			this.webContents = new EventEmitter();
 			this.webContents.session = profileSession;
@@ -68,8 +67,11 @@ test('registers a profile session preload before constructing its Outlook view',
 
 	manager.initialize();
 
-	assert.deepEqual(events.slice(0, 2), ['register', 'construct']);
-	assert.equal(profileViewOptions.webPreferences.preload, undefined);
-	assert.equal(profileWebContents.listenerCount('dom-ready'), 1);
-	assert.equal(profileWebContents.listenerCount('did-frame-finish-load'), 1);
+	assert.equal(
+		profileViewOptions.webPreferences.preload,
+		require.resolve('../../app/browser/preload.js'),
+	);
+	assert.equal(preloadRegistrationCount, 0);
+	assert.equal(profileWebContents.listenerCount('dom-ready'), 0);
+	assert.equal(profileWebContents.listenerCount('did-frame-finish-load'), 0);
 });

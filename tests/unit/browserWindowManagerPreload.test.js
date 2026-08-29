@@ -2,22 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
-test('registers the session preload before constructing the Outlook window', async () => {
-	const registrations = [];
-	const events = [];
-	const outlookSession = {
-		getPreloadScripts: () => [],
-		registerPreloadScript: registration => {
-			registrations.push(registration);
-			events.push('register');
-		},
-	};
+test('configures the direct preload on the Outlook window', async () => {
 	let browserWindowOptions;
 	class BrowserWindow extends EventEmitter {
 		constructor(options) {
 			super();
 			browserWindowOptions = options;
-			events.push('construct');
 			this.webContents = new EventEmitter();
 		}
 	}
@@ -39,10 +29,6 @@ test('registers the session preload before constructing the Outlook window', asy
 			nativeImage: { createFromPath: () => undefined },
 			nativeTheme: { shouldUseDarkColors: false },
 			powerSaveBlocker: {},
-			session: { fromPartition: partition => {
-				assert.equal(partition, 'persist:outlook-4-linux');
-				return outlookSession;
-			} },
 		},
 	};
 	require.cache[windowStatePath] = {
@@ -80,7 +66,8 @@ test('registers the session preload before constructing the Outlook window', asy
 
 	await manager.createWindow();
 
-	assert.deepEqual(events.slice(0, 2), ['register', 'construct']);
-	assert.equal(registrations.length, 1);
-	assert.equal(browserWindowOptions.webPreferences.preload, undefined);
+	assert.equal(
+		browserWindowOptions.webPreferences.preload,
+		require.resolve('../../app/browser/preload.js'),
+	);
 });

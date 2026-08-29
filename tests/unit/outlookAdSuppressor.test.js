@@ -50,6 +50,7 @@ describe('Outlook ad suppressor', () => {
       assert.match(style.textContent, new RegExp(marker.replace('.', String.raw`\.`)));
     }
     assert.match(style.textContent, /display:\s*none\s*!important/);
+    assert.match(style.textContent, /div:has\(> div\[id\^="owaadbar"\]\)/);
   });
 
   it('does not use text, upsell, or size-only hiding rules', () => {

@@ -1,8 +1,6 @@
 const { WebContentsView, session, ipcMain } = require("electron");
 const path = require("node:path");
 const product = require("../product");
-const { registerBrowserPreload } = require("./browserPreloadSession");
-const { scheduleOutlookBrowserRuntimeInjection } = require("./outlookBrowserRuntimeInjector");
 
 const LEGACY_PARTITION = product.partition;
 
@@ -345,10 +343,10 @@ class ProfileViewManager {
   // --- View lifecycle --------------------------------------------------
 
   #createView(profile) {
-    registerBrowserPreload(session.fromPartition(profile.partition), profile.partition);
     const view = new WebContentsView({
       webPreferences: {
         partition: profile.partition,
+        preload: path.join(__dirname, "..", "browser", "preload.js"),
         plugins: true,
         spellcheck: true,
         webviewTag: true,
@@ -360,10 +358,6 @@ class ProfileViewManager {
         sandbox: false,
       },
     });
-    const scheduleBrowserRuntime = () => scheduleOutlookBrowserRuntimeInjection(view.webContents, this.#config);
-    view.webContents.on("dom-ready", scheduleBrowserRuntime);
-    view.webContents.on("did-frame-finish-load", scheduleBrowserRuntime);
-
     // Rebind the in-app screen-share picker on this profile's session.
     // `setDisplayMediaRequestHandler` is per-session and the root window's
     // binding does not carry across to profile partitions (#2529).
