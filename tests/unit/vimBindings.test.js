@@ -30,7 +30,7 @@ function createActions(calls) {
 	});
 }
 
-function createDocument(frames = []) {
+function createDocument() {
 	return {
 		activeElement: null,
 		listeners: [],
@@ -41,53 +41,8 @@ function createDocument(frames = []) {
 			this.listeners = this.listeners.filter(item => item.type !== type ||
 				item.listener !== listener || item.capture !== capture);
 		},
-		querySelectorAll(selector) { return selector === 'iframe' ? frames : []; }
+		querySelectorAll() { return []; }
 	};
-}
-
-function createMutationObserverClass() {
-	class MutationObserverStub {
-		constructor(callback) {
-			this.callback = callback;
-			this.targets = [];
-			MutationObserverStub.instances.push(this);
-		}
-
-		observe(target) {
-			this.targets.push(target);
-		}
-
-		notify(records) {
-			this.callback(records);
-		}
-
-		disconnect() {
-			this.disconnected = true;
-		}
-	}
-	MutationObserverStub.instances = [];
-	return MutationObserverStub;
-}
-
-function createIframe(contentDocument) {
-	const iframe = {
-		tagName: 'IFRAME',
-		listeners: [],
-		addEventListener(type, listener) {
-			this.listeners.push({ type, listener });
-		},
-		removeEventListener(type, listener) {
-			this.listeners = this.listeners.filter(item => item.type !== type || item.listener !== listener);
-		}
-	};
-	Object.defineProperty(iframe, 'contentDocument', {
-		get() {
-			if (contentDocument instanceof Error) throw contentDocument;
-			return contentDocument;
-		}
-	});
-	iframe.setContentDocument = value => { contentDocument = value; };
-	return iframe;
 }
 
 test('dispatches j to nextMessage and consumes the event', () => {
@@ -322,113 +277,6 @@ test('attached listeners dispatch through the injected action adapter', () => {
 	assert.deepEqual(calls, ['nextMessage']);
 });
 
-test('attaches one capture listener per accessible document and skips inaccessible iframes', () => {
-	const iframeDocument = createDocument();
-	const document = createDocument([
-		createIframe(iframeDocument),
-		createIframe(new Error('cross-origin')),
-		createIframe(null)
-	]);
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions([]), document, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-
-	assert.deepEqual(document.listeners.map(({ type, capture }) => ({ type, capture })), [
-		{ type: 'focusin', capture: true },
-		{ type: 'focusout', capture: true },
-		{ type: 'blur', capture: true },
-		{ type: 'selectionchange', capture: true },
-		{ type: 'scroll', capture: true },
-		{ type: 'resize', capture: undefined },
-		{ type: 'blur', capture: undefined },
-		{ type: 'keydown', capture: true },
-	]);
-	assert.deepEqual(iframeDocument.listeners.map(({ type, capture }) => ({ type, capture })), [
-		{ type: 'focusin', capture: true },
-		{ type: 'focusout', capture: true },
-		{ type: 'blur', capture: true },
-		{ type: 'selectionchange', capture: true },
-		{ type: 'scroll', capture: true },
-		{ type: 'resize', capture: undefined },
-		{ type: 'blur', capture: undefined },
-		{ type: 'keydown', capture: true }
-	]);
-	assert.equal(MutationObserverClass.instances.length, 2);
-});
-
-test('does not attach duplicate listeners when an iframe document is reprocessed', () => {
-	const iframeDocument = createDocument();
-	const iframe = createIframe(iframeDocument);
-	const document = createDocument([iframe]);
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions([]), document, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
-
-	assert.equal(iframeDocument.listeners.length, 8);
-});
-
-test('attaches a newly added iframe document after initialization', () => {
-	const document = createDocument();
-	const iframeDocument = createDocument();
-	const iframe = createIframe(iframeDocument);
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions([]), document, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
-
-	assert.equal(iframeDocument.listeners.length, 8);
-	assert.deepEqual(iframeDocument.listeners.map(({ type, capture }) => ({ type, capture })), [
-		{ type: 'focusin', capture: true },
-		{ type: 'focusout', capture: true },
-		{ type: 'blur', capture: true },
-		{ type: 'selectionchange', capture: true },
-		{ type: 'scroll', capture: true },
-		{ type: 'resize', capture: undefined },
-		{ type: 'blur', capture: undefined },
-		{ type: 'keydown', capture: true }
-	]);
-});
-
-test('attaches an iframe document inside a newly added container subtree', () => {
-	const document = createDocument();
-	const iframeDocument = createDocument();
-	const iframe = createIframe(iframeDocument);
-	const container = {
-		querySelectorAll(selector) { return selector === 'iframe' ? [iframe] : []; }
-	};
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions([]), document, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	MutationObserverClass.instances[0].notify([{ addedNodes: [container] }]);
-
-	assert.equal(iframeDocument.listeners.length, 8);
-});
-
-test('rebinds an iframe after reload without duplicating its load listener', () => {
-	const firstDocument = createDocument();
-	const secondDocument = createDocument();
-	const iframe = createIframe(firstDocument);
-	const document = createDocument([iframe]);
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions([]), document, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	iframe.setContentDocument(secondDocument);
-	const loadListeners = iframe.listeners.filter(({ type }) => type === 'load');
-	assert.equal(loadListeners.length, 1);
-	loadListeners[0].listener();
-	MutationObserverClass.instances[0].notify([{ addedNodes: [iframe] }]);
-
-	assert.equal(firstDocument.listeners.length, 0);
-	assert.equal(secondDocument.listeners.length, 8);
-	assert.deepEqual(iframe.listeners.map(({ type }) => type), ['load']);
-});
-
 function createEditing(outcomes = []) {
 	const calls = [];
 	const destroyedDocuments = [];
@@ -494,8 +342,7 @@ test('does not route search and dialog fields to mailbox actions after editing p
 test('destroys document listeners and editing sessions exactly once', () => {
 	const document = createDocument();
 	const editing = createEditing();
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ document, editing, MutationObserverClass });
+	const bindings = createVimBindings({ document, editing });
 
 	bindings.init({ shortcuts: { vim: { enabled: true } } });
 	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
@@ -504,43 +351,6 @@ test('destroys document listeners and editing sessions exactly once', () => {
 	bindings.destroy();
 
 	assert.deepEqual(document.listeners, []);
-	assert.equal(MutationObserverClass.instances.every(observer => observer.disconnected), true);
-});
-
-test('routes iframe events to the iframe document and tears them down on detach', () => {
-	const calls = [];
-	const iframeDocument = createDocument();
-	const iframe = createIframe(iframeDocument);
-	const document = createDocument([iframe]);
-	const editing = createEditing();
-	const MutationObserverClass = createMutationObserverClass();
-	const bindings = createVimBindings({ actions: createActions(calls), document, editing, MutationObserverClass });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	const iframeKeydown = iframeDocument.listeners.find(({ type }) => type === 'keydown').listener;
-	iframeKeydown(createEvent('j'));
-	assert.equal(editing.calls[0].document, iframeDocument);
-
-	MutationObserverClass.instances[0].notify([{ removedNodes: [iframe], addedNodes: [] }]);
-	assert.deepEqual(iframeDocument.listeners, []);
-	assert.deepEqual(iframe.listeners, []);
-	assert.deepEqual(editing.destroyedDocuments, [iframeDocument]);
-});
-
-test('destroys editing globally once and removes iframe load listeners on final destroy', () => {
-	const iframeDocument = createDocument();
-	const iframe = createIframe(iframeDocument);
-	const document = createDocument([iframe]);
-	const editing = createEditing();
-	const bindings = createVimBindings({ document, editing });
-
-	bindings.init({ shortcuts: { vim: { enabled: true } } });
-	assert.deepEqual(iframe.listeners.map(({ type }) => type), ['load']);
-	bindings.destroy();
-	bindings.destroy();
-
-	assert.deepEqual(iframe.listeners, []);
-	assert.equal(editing.destroyedDocuments.filter(value => value === iframeDocument).length, 1);
-	assert.equal(editing.destroyedDocuments.filter(value => value === document).length, 1);
+	assert.deepEqual(editing.destroyedDocuments, [document]);
 	assert.equal(editing.destroyCalls, 1);
 });

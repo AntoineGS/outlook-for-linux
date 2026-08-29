@@ -10,7 +10,6 @@ if (!globalThis.__oflOutlookVimInitialized) {
     vimController = createVimBindings({
       document: globalThis.document,
       MutationObserverClass: globalThis.MutationObserver,
-      manageFrames: false,
     });
     vimController.init(runtimeConfig);
     const pagehideHandler = event => {

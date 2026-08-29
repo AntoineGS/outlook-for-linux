@@ -109,9 +109,8 @@ function createCommandResolver(actions, clock = {}) {
 
 function createVimBindings({ actions = outlookActions, document: rootDocument = globalThis.document,
 	MutationObserverClass = globalThis.MutationObserver,
-	editing = null, createEditing = createVimEditing, manageFrames = true } = {}) {
+	editing = null, createEditing = createVimEditing } = {}) {
 	const documentRecords = new Map();
-	const frameRecords = new Map();
 	const managedEditings = new Map();
 	let destroyed = false;
 	let config = null;
@@ -126,20 +125,9 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		return { controller, managed: true };
 	}
 
-	function getFrameDocument(frame) {
-		try {
-			return frame && frame.contentDocument;
-		} catch {
-			// Cross-origin iframe documents are not accessible.
-			return null;
-		}
-	}
-
 	function detachDocument(document) {
 		const record = documentRecords.get(document);
 		if (!record) return;
-		for (const frame of record.frames) detachFrame(frame);
-		record.observer?.disconnect?.();
 		document.removeEventListener?.('keydown', record.keydownHandler, true);
 		documentRecords.delete(document);
 		if (record.managed) {
@@ -148,42 +136,11 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		} else editing.destroyDocument?.(document);
 	}
 
-	function attachFrame(frame, ownerDocument) {
-		if (!frame || frameRecords.has(frame) || destroyed) return;
-		const loadHandler = () => {
-			const previousDocument = frameRecords.get(frame)?.document;
-			const nextDocument = getFrameDocument(frame);
-			if (previousDocument && previousDocument !== nextDocument) detachDocument(previousDocument);
-			const record = frameRecords.get(frame);
-			if (record) record.document = nextDocument;
-			attachDocument(nextDocument);
-		};
-		const record = { frame, ownerDocument, document: getFrameDocument(frame), loadHandler };
-		frameRecords.set(frame, record);
-		ownerDocument && documentRecords.get(ownerDocument)?.frames.add(frame);
-		frame.addEventListener?.('load', loadHandler);
-		attachDocument(record.document);
-	}
-
-	function detachFrame(frame) {
-		const record = frameRecords.get(frame);
-		if (!record) return;
-		frame.removeEventListener?.('load', record.loadHandler);
-		record.ownerDocument && documentRecords.get(record.ownerDocument)?.frames.delete(frame);
-		frameRecords.delete(frame);
-		if (record.document) detachDocument(record.document);
-	}
-
-	function attachFrames(document) {
-		if (!document || typeof document.querySelectorAll !== 'function') return;
-		for (const frame of document.querySelectorAll('iframe')) attachFrame(frame, document);
-	}
-
 	function attachDocument(document) {
 		if (!document || documentRecords.has(document) || destroyed) return;
 		const resolver = createCommandResolver(actions);
 		const editingRecord = editingForDocument(document);
-		const record = { resolver, frames: new Set(), observer: null, keydownHandler: null,
+		const record = { resolver, keydownHandler: null,
 			editing: editingRecord.controller, managed: editingRecord.managed };
 		record.keydownHandler = event => {
 			if (record.editing.handleKeydown(event, document) !== 'pass-through') return;
@@ -192,31 +149,6 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		documentRecords.set(document, record);
 		record.editing.init?.(config);
 		document.addEventListener?.('keydown', record.keydownHandler, true);
-		if (!manageFrames) return;
-		attachFrames(document);
-		if (typeof MutationObserverClass !== 'function') return;
-		const observer = new MutationObserverClass(records => {
-			for (const record of records) {
-				for (const node of record.removedNodes || []) {
-					const isIframe = node && (node.tagName === 'IFRAME' ||
-						(typeof node.matches === 'function' && node.matches('iframe')));
-					if (isIframe) detachFrame(node);
-					if (node && typeof node.querySelectorAll === 'function') {
-						for (const iframe of node.querySelectorAll('iframe')) detachFrame(iframe);
-					}
-				}
-				for (const node of record.addedNodes || []) {
-					const isIframe = node && (node.tagName === 'IFRAME' ||
-						(typeof node.matches === 'function' && node.matches('iframe')));
-					if (isIframe) attachFrame(node, document);
-					if (node && typeof node.querySelectorAll === 'function') {
-						for (const iframe of node.querySelectorAll('iframe')) attachFrame(iframe, document);
-					}
-				}
-			}
-		});
-		record.observer = observer;
-		observer.observe(document.body || document.documentElement || document, { childList: true, subtree: true });
 	}
 
 	function init(nextConfig) {
@@ -229,7 +161,6 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		if (destroyed) return;
 		destroyed = true;
 		for (const document of [...documentRecords.keys()]) detachDocument(document);
-		for (const frame of [...frameRecords.keys()]) detachFrame(frame);
 		if (editing) editing.destroy?.();
 	}
 

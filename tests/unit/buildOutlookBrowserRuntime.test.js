@@ -20,7 +20,7 @@ describe('Outlook browser runtime builder', () => {
       assert.match(source, /__oflOutlookVimInitialized/);
       assert.doesNotMatch(source, /outlookAdSuppressor/);
       assert.match(source, /createVimBindings/);
-      assert.match(source, /manageFrames:\s*!?0|manageFrames:\s*false/);
+      assert.doesNotMatch(source, /manageFrames/);
       assert.equal(source.split('__OFL_CONFIG__').length - 1, 1);
       assert.doesNotMatch(source, /\brequire\s*\(\s*['"]/);
     } finally {
