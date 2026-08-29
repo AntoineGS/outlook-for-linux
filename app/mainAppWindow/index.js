@@ -26,6 +26,8 @@ const product = require("../product");
 const { isApprovedRendererSource } = require("./authRecoverySource");
 const { resolveLaunchUrl } = require("../urlHandling");
 const { registerFeatureIpc } = require("../security/featureIpc");
+const { injectOutlookMainDocumentRuntime } = require("./outlookMainDocumentRuntimeInjector");
+const { applyOutlookAdCss } = require("./outlookAdCss");
 
 const DEFAULT_SCREEN_SHARING_THUMBNAIL_CONFIG = {
   enabled: true,
@@ -999,10 +1001,11 @@ function onDidFrameFinishLoad(
   frameProcessId,
   frameRoutingId
 ) {
-  console.debug("did-frame-finish-load", event, isMainFrame);
-
   if (isMainFrame) {
-    return; // We want to insert CSS only into the Teams V2 content iframe
+    const frame = webFrameMain.fromId(frameProcessId, frameRoutingId);
+    void applyOutlookAdCss(frame).catch(() => {});
+    void injectOutlookMainDocumentRuntime(frame, config).catch(() => {});
+    return;
   }
 
   const wf = webFrameMain.fromId(frameProcessId, frameRoutingId);

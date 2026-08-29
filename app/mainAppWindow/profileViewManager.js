@@ -1,6 +1,8 @@
-const { WebContentsView, session, ipcMain } = require("electron");
+const { WebContentsView, session, ipcMain, webFrameMain } = require("electron");
 const path = require("node:path");
 const product = require("../product");
+const { injectOutlookMainDocumentRuntime } = require("./outlookMainDocumentRuntimeInjector");
+const { applyOutlookAdCss } = require("./outlookAdCss");
 
 const LEGACY_PARTITION = product.partition;
 
@@ -365,6 +367,13 @@ class ProfileViewManager {
 
     this.#views.set(profile.id, view);
     this.#applyBounds(view);
+
+    view.webContents.on("did-frame-finish-load", (event, isMainFrame, frameProcessId, frameRoutingId) => {
+      if (!isMainFrame) return;
+      const frame = webFrameMain.fromId(frameProcessId, frameRoutingId);
+      void applyOutlookAdCss(frame).catch(() => {});
+      void injectOutlookMainDocumentRuntime(frame, this.#config).catch(() => {});
+    });
 
     const url = profile.url || this.#config.url;
     view.webContents.loadURL(url, {

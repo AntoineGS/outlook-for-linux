@@ -12,6 +12,13 @@ const appSource = readFileSync(join(ROOT, 'app', 'index.js'), 'utf8');
 const mainWindowSource = readFileSync(join(ROOT, 'app', 'mainAppWindow', 'index.js'), 'utf8');
 const menuSource = readFileSync(join(ROOT, 'app', 'menus', 'appMenu.js'), 'utf8');
 
+const addEventHandlersMatch = mainWindowSource.match(
+  /function addEventHandlers\(\) \{([\s\S]*?)\n\}\n\nfunction getWebRequestFilterFromURL/,
+);
+const rootFinishLoadBody = mainWindowSource.match(
+  /function onDidFinishLoad\(\) \{([\s\S]*?)\n\}\n\nfunction injectScreenSharingLogic/,
+);
+
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -20,6 +27,34 @@ function declaredModules(source) {
   const match = source.match(/const\s+modules\s*=\s*\[([\s\S]*?)\];/);
   assert.ok(match, 'preload modules array should remain a literal');
   return [...match[1].matchAll(/name:\s*["']([^"']+)["']/g)].map(([, name]) => name);
+}
+
+function createRootFinishLoadHandler() {
+  const match = mainWindowSource.match(
+    /function onDidFinishLoad\(\) \{([\s\S]*?)\n\}\n\nfunction injectScreenSharingLogic/,
+  );
+  assert.ok(match, 'root did-finish-load handler should remain a named function');
+  return new Function(
+    'window',
+    'config',
+    'product',
+    'applyOutlookAdCss',
+    'injectOutlookMainDocumentRuntime',
+    'customCSS',
+    'initSystemThemeFollow',
+    match[1],
+  );
+}
+
+function createRootFrameFinishLoadHandler() {
+  const match = mainWindowSource.match(
+    /function onDidFrameFinishLoad\(\s*event,\s*isMainFrame,\s*frameProcessId,\s*frameRoutingId\s*\) \{([\s\S]*?)\n\}/,
+  );
+  assert.ok(match, 'root did-frame-finish-load handler should remain a named function');
+  return new Function(
+    'event', 'isMainFrame', 'frameProcessId', 'frameRoutingId',
+    'webFrameMain', 'customCSS', 'applyOutlookAdCss', 'injectOutlookMainDocumentRuntime', 'config', match[1],
+  );
 }
 
 describe('Outlook runtime boundary', () => {
@@ -33,9 +68,7 @@ describe('Outlook runtime boundary', () => {
        'webauthnOverride',
        'navigationButtons',
        'framelessTweaks',
-       'vimBindings',
-       'outlookAdSuppressor',
-     ]) {
+    ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
     }
 
@@ -64,21 +97,139 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
-  it('creates a Vim controller for each preload document', () => {
-    assert.match(preloadSource, /module\.name\s*===\s*["']vimBindings["']/);
-    assert.match(
-      preloadSource,
-      /createVimBindings\(\{[\s\S]*?document:\s*globalThis\.document[\s\S]*?MutationObserverClass:\s*globalThis\.MutationObserver[\s\S]*?manageFrames:\s*false/,
-    );
-    assert.match(
-      preloadSource,
-      /addEventListener\(["']pagehide["'][\s\S]*?controller\.destroy\(\)/,
-    );
+  it('does not own Vim or ad suppression in preload', () => {
+    assert.doesNotMatch(preloadSource, /vimBindings/);
+    assert.doesNotMatch(preloadSource, /outlookAdSuppressor/);
   });
 
-  it('does not schedule a generalized Outlook browser runtime', () => {
-    assert.doesNotMatch(mainWindowSource, /outlookBrowserRuntimeInjector/);
-    assert.doesNotMatch(mainWindowSource, /scheduleOutlookBrowserRuntimeInjection/);
+  it('does not let did-finish-load own native ad CSS or Vim injection', () => {
+    let adCssApplications = 0;
+    const handler = createRootFinishLoadHandler();
+    const window = {
+      webContents: {
+        getURL: () => 'https://outlook.live.com/mail/',
+        executeJavaScript: async () => undefined,
+      },
+    };
+    const product = { features: { screenSharing: false } };
+    const customCSS = {
+      onDidFinishLoad: () => {},
+    };
+
+    handler(
+      window,
+      {},
+      product,
+      undefined,
+      undefined,
+      customCSS,
+      () => {},
+    );
+    handler(
+      window,
+      {},
+      product,
+      undefined,
+      undefined,
+      customCSS,
+      () => {},
+    );
+
+    assert.equal(adCssApplications, 0);
+  });
+
+  it('registers the root did-finish-load handler with addEventHandlers', () => {
+    assert.ok(addEventHandlersMatch, 'addEventHandlers should remain a named function');
+    assert.match(addEventHandlersMatch[1], /window\.webContents\.on\("did-finish-load", onDidFinishLoad\)/);
+    assert.match(addEventHandlersMatch[1], /window\.webContents\.on\("did-frame-finish-load", onDidFrameFinishLoad\)/);
+  });
+
+  it('does not let did-finish-load own Vim runtime injection', () => {
+    assert.ok(rootFinishLoadBody, 'root did-finish-load body should be available');
+    assert.doesNotMatch(rootFinishLoadBody[1], /injectOutlookMainDocumentRuntime/);
+    assert.doesNotMatch(mainWindowSource, /function onDidNavigateInPage\s*\(/);
+  });
+
+  it('does not apply native CSS on a non-HTTPS root load', () => {
+    let adCssApplications = 0;
+    const handler = createRootFinishLoadHandler();
+    const window = {
+      webContents: {
+        getURL: () => 'chrome-error://chromewebdata/',
+        executeJavaScript: async () => undefined,
+      },
+    };
+
+    handler(window, {}, { features: { screenSharing: false } }, undefined, undefined,
+      { onDidFinishLoad: () => {} }, () => {});
+
+    assert.equal(adCssApplications, 0);
+  });
+
+  it('injects only the main frame resolved with the exact Electron frame arguments', () => {
+    let adCssApplications = 0;
+    let vimApplications = 0;
+    const frame = { url: 'https://outlook.office.com/' };
+    const calls = [];
+    const webFrameMain = { fromId: (...args) => { calls.push(args); return frame; } };
+    const customCSS = { onDidFrameFinishLoad: () => { throw new Error('must not run for main frame'); } };
+    let adFrame;
+    let vimFrame;
+    const adCss = async (receivedFrame) => { adFrame = receivedFrame; adCssApplications++; };
+    const injector = async (receivedFrame) => { vimFrame = receivedFrame; vimApplications++; };
+    const handler = createRootFrameFinishLoadHandler();
+
+    handler({ type: 'event' }, true, 12, 34, webFrameMain, customCSS, adCss, injector, {});
+
+    assert.deepEqual(calls, [[12, 34]]);
+    assert.equal(adCssApplications, 1);
+    assert.equal(vimApplications, 1);
+    assert.equal(adFrame, frame);
+    assert.equal(vimFrame, frame);
+  });
+
+  it('does not apply ad CSS or Vim to non-main frames', () => {
+    let adCssApplications = 0;
+    let vimApplications = 0;
+    let customCssApplications = 0;
+    const handler = createRootFrameFinishLoadHandler();
+    const webFrameMain = { fromId: () => ({}) };
+
+    handler({}, false, 12, 34, webFrameMain, {
+      onDidFrameFinishLoad: () => { customCssApplications++; },
+    }, async () => { adCssApplications++; }, async () => { vimApplications++; }, {});
+
+    assert.equal(adCssApplications, 0);
+    assert.equal(vimApplications, 0);
+    assert.equal(customCssApplications, 1);
+  });
+
+  it('contains ad and Vim rejections independently without blocking the other', async () => {
+    const handler = createRootFrameFinishLoadHandler();
+    const webFrameMain = { fromId: () => ({}) };
+    let adCssApplications = 0;
+    let vimApplications = 0;
+    const unhandled = [];
+    const onUnhandledRejection = (reason) => unhandled.push(reason);
+    process.once('unhandledRejection', onUnhandledRejection);
+
+    handler({}, true, 12, 34, webFrameMain, {}, async () => {
+      throw new Error('ad CSS failed');
+    }, async () => {
+      vimApplications++;
+    }, {});
+    handler({}, true, 12, 34, webFrameMain, {}, async () => {
+      adCssApplications++;
+    }, async () => {
+      throw new Error('injection failed');
+    }, {});
+    await Promise.resolve();
+    await Promise.resolve();
+
+    process.removeListener('unhandledRejection', onUnhandledRejection);
+    assert.deepEqual(unhandled, []);
+    assert.equal(adCssApplications, 1);
+    assert.equal(vimApplications, 1);
   });
 
   it('does not start activity tracking or Teams-only main services', () => {
@@ -99,28 +250,25 @@ describe('Outlook runtime boundary', () => {
     );
   });
 
-  it('does not retain the obsolete browser runtime bundle pipeline', () => {
+  it('keeps the browser runtime build pipeline owned by Tasks 1–2', () => {
     for (const relativePath of [
       'app/browser/outlookBrowserRuntime.js',
       'scripts/buildOutlookBrowserRuntime.js',
       'tests/unit/buildOutlookBrowserRuntime.test.js',
+      'tests/unit/outlookMainDocumentRuntimeInjector.test.js',
     ]) {
-      assert.equal(existsSync(join(ROOT, relativePath)), false, `${relativePath} must be deleted`);
+      assert.equal(existsSync(join(ROOT, relativePath)), true, `${relativePath} must exist`);
     }
 
     const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    assert.equal(packageJson.devDependencies.esbuild, undefined);
-    for (const scriptName of [
-      'build:outlook-runtime',
-      'pretest:e2e',
-      'pretest:authenticated',
-      'prestart:dev',
-      'prepack',
-    ]) {
-      assert.equal(packageJson.scripts[scriptName], undefined, `${scriptName} must be absent`);
-    }
-    assert.equal(packageJson.scripts.prestart, 'npm ci');
-    assert.equal(packageJson.build.beforePack, undefined);
+    assert.equal(packageJson.devDependencies.esbuild, '0.28.2');
+    assert.equal(packageJson.scripts['build:outlook-runtime'], 'node scripts/buildOutlookBrowserRuntime.js');
+    assert.match(packageJson.scripts['prestart:dev'], /build:outlook-runtime/);
+    assert.match(packageJson.scripts['pretest:e2e'], /build:outlook-runtime/);
+    assert.match(packageJson.scripts['pretest:authenticated'], /build:outlook-runtime/);
+    assert.match(packageJson.scripts.prepack, /build:outlook-runtime/);
+    assert.equal(packageJson.build.beforePack, 'scripts/buildOutlookBrowserRuntime.js');
+    assert.match(readFileSync(join(ROOT, '.gitignore'), 'utf8'), /^\/app\/browser\/generated\/$/m);
   });
 
   it('keeps unread-count on the generic tray and badge APIs', () => {

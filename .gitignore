@@ -15,3 +15,6 @@ debian-changelog
 test-results/
 playwright-report/
 .auth/
+
+# Generated browser runtime bundle
+/app/browser/generated/

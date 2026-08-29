@@ -2,7 +2,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
+const vm = require('node:vm');
 const { listPackage, extractFile, extractAll } = require('@electron/asar');
+const { buildOutlookBrowserRuntime } = require('./buildOutlookBrowserRuntime');
 
 const ARCHIVE_PATH = path.join(process.cwd(), 'dist/linux-unpacked/resources/app.asar');
 const CORE_PACKAGE_SUFFIX = '/node_modules/@replit/codemirror-vim-core/package.json';
@@ -14,6 +16,7 @@ const RUNTIME_MODULES = [
 	'/app/browser/tools/vimCore.js',
 	'/app/browser/tools/vimEditing.js',
 ];
+const GENERATED_RUNTIME_PATH = '/app/browser/generated/outlookBrowserRuntime.js';
 const FORBIDDEN_IDENTIFIERS = [
 	'__vimRichText',
 	'vimRichTextSpikeBridge',
@@ -21,11 +24,12 @@ const FORBIDDEN_IDENTIFIERS = [
 	'task6-vim-controls',
 	'fixture-mention',
 ];
-const FORBIDDEN_PATH = /(?:^|\/)(?:tests|\.worktrees|\.superpowers|test-results|playwright-report|docs\/(?:plans|specs|superpowers\/plans|superpowers\/specs)|Cookies|Local Storage|session)(?:\/|$)/i;
+const FORBIDDEN_PATH = /(?:^|\/)(?:tests|\.worktrees|\.superpowers|test-results|playwright-report|docs\/(?:plans|specs|superpowers\/(?:plans|specs|reports))|Cookies|Local Storage|session)(?:\/|$)/i;
 
-function evaluateVimEditingPackage(files, contents, extractionFailures = []) {
+function evaluateVimEditingPackage(files, contents, extractionFailures = [], expectedGeneratedSource) {
 	const failures = [];
 	if (extractionFailures.length > 0) failures.push('relevant package archive entries could not be extracted');
+	if (typeof expectedGeneratedSource !== 'string') failures.push('fresh expected Outlook browser runtime is missing');
 	const corePackagePath = files.find(file => file.endsWith(CORE_PACKAGE_SUFFIX));
 	let coreVersion;
 	try {
@@ -36,6 +40,42 @@ function evaluateVimEditingPackage(files, contents, extractionFailures = []) {
 	if (coreVersion !== '0.1.0') failures.push('@replit/codemirror-vim-core version must be exactly 0.1.0');
 	for (const modulePath of RUNTIME_MODULES) {
 		if (!files.includes(modulePath)) failures.push(`runtime module is missing: ${modulePath}`);
+	}
+	if (!files.includes(GENERATED_RUNTIME_PATH)) {
+		failures.push('generated Outlook browser runtime is missing');
+	} else {
+		const generatedRuntime = contents.get(GENERATED_RUNTIME_PATH);
+		if (typeof generatedRuntime !== 'string') {
+			failures.push('generated Outlook browser runtime could not be inspected');
+		} else {
+			try {
+				new vm.Script(generatedRuntime);
+			} catch {
+				failures.push('generated Outlook browser runtime source is not valid JavaScript');
+			}
+			if (!/^\s*(?:["']use strict["'];\s*)?\(\(\)\s*=>\s*\{[\s\S]*\}\)\(\);\s*$/.test(generatedRuntime)) {
+				failures.push('generated Outlook browser runtime is not an IIFE');
+			}
+			if (typeof expectedGeneratedSource === 'string' && generatedRuntime !== expectedGeneratedSource) {
+				failures.push('packaged Outlook browser runtime differs from the fresh expected build');
+			}
+			const configTokenCount = generatedRuntime.split('__OFL_CONFIG__').length - 1;
+			if (configTokenCount !== 1) {
+				failures.push('generated Outlook browser runtime must contain exactly one __OFL_CONFIG__ token');
+			}
+			if (!generatedRuntime.includes('__oflOutlookVimInitialized')) {
+				failures.push('generated Outlook browser runtime initialization marker is missing');
+			}
+			if (/\brequire\s*\(/.test(generatedRuntime)) {
+				failures.push('generated Outlook browser runtime contains unresolved CommonJS require calls');
+			}
+			if (/\bprocess\b/.test(generatedRuntime)) {
+				failures.push('generated Outlook browser runtime contains a browser-unsafe process dependency');
+			}
+			if (/outlookAdSuppressor|adSuppressor/i.test(generatedRuntime)) {
+				failures.push('generated Outlook browser runtime contains ad suppressor code');
+			}
+		}
 	}
 	try {
 		const dependencies = JSON.parse(contents.get('/package.json')).dependencies || {};
@@ -78,11 +118,23 @@ function isRelevantTextEntry(file) {
 
 async function main() {
 	if (!fs.existsSync(ARCHIVE_PATH)) throw new Error(`Missing package archive: ${ARCHIVE_PATH}`);
-	const failures = evaluateVimEditingPackage(...Object.values(readArchive(ARCHIVE_PATH)));
+	let expectedGeneratedSource;
+	const expectedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'outlook-runtime-'));
+	try {
+		const expectedPath = path.join(expectedRoot, 'outlookBrowserRuntime.js');
+		await buildOutlookBrowserRuntime({ outputFile: expectedPath });
+		expectedGeneratedSource = fs.readFileSync(expectedPath, 'utf8');
+	} catch {
+		// A missing fresh output must make package verification fail closed.
+	} finally {
+		fs.rmSync(expectedRoot, { recursive: true, force: true });
+	}
+	const failures = evaluateVimEditingPackage(...Object.values(readArchive(ARCHIVE_PATH)), expectedGeneratedSource);
 	const rules = [
 		'exact @replit/codemirror-vim-core version 0.1.0',
 		'no Vim spike globals, bridge, or fixed fixture identifiers',
 		'no Cookies, Local Storage, session artifacts, tests, reports, or plan files',
+		'generated Outlook browser runtime is present and browser-safe',
 	];
 	for (const rule of rules) console.log(`rule: ${rule}`);
 	if (failures.length > 0) {

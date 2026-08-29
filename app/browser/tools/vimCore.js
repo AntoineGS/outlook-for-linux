@@ -8,10 +8,11 @@ const OPERATOR_MOTIONS = new Set([
 	'h', 'j', 'k', 'l', 'w', 'b', 'e', '0', '^', '$', 'G', 'g',
 ]);
 
-function createCodeMirrorShim() {
+function createCodeMirrorShim(platform = globalThis.navigator?.userAgentData?.platform ??
+	globalThis.navigator?.platform ?? '') {
 	function CodeMirror() {}
 	const listenerTopology = [];
-	CodeMirror.isMac = process.platform === 'darwin';
+	CodeMirror.isMac = /^mac/i.test(platform);
 	CodeMirror.Pos = function Pos(line, ch) { this.line = line; this.ch = ch; };
 	CodeMirror.isWordChar = value => /^[\p{L}\p{N}_]$/u.test(value);
 	CodeMirror.commands = {

@@ -172,6 +172,13 @@ test('matches CodeMirror 5 keyName formatting for deletion modifiers', async () 
 	]) assert.equal(CodeMirror.keyName(event), expected);
 });
 
+test('derives Mac shortcuts from the browser platform string', () => {
+	assert.equal(createCodeMirrorShim('MacIntel').isMac, true);
+	assert.equal(createCodeMirrorShim('macOS').isMac, true);
+	assert.equal(createCodeMirrorShim('Linux x86_64').isMac, false);
+	assert.equal(createCodeMirrorShim('Win32').isMac, false);
+});
+
 test('tracks only DOM fallback listeners in the CodeMirror topology shim', () => {
 	const CodeMirror = createCodeMirrorShim();
 	const emitter = {
