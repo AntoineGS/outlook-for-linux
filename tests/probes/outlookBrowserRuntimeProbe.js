@@ -75,6 +75,32 @@ async function main() {
     assert.equal(state.badges.length, 1);
     assert.equal(state.badges[0], 'NORMAL');
 
+    await window.webContents.executeJavaScript(`
+      document.querySelector('#editor').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'i', bubbles: true })
+      );
+    `);
+    const insertDeadline = Date.now() + 3000;
+    do {
+      state = await window.webContents.executeJavaScript(`({
+        badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
+      })`);
+      if (state.badges.length === 1 && state.badges[0] === 'INSERT') break;
+      await sleep(50);
+    } while (Date.now() < insertDeadline);
+
+    assert.equal(state.badges.length, 1);
+    assert.equal(state.badges[0], 'INSERT');
+    await window.webContents.executeJavaScript(`
+      (() => {
+        document.querySelector('#composer').remove();
+        return new Promise(resolve => setTimeout(resolve, 0));
+      })();
+    `);
+    assert.equal(await window.webContents.executeJavaScript(
+      'document.querySelectorAll("[data-vim-mode-badge]").length',
+    ), 0);
+
     await adWindow.loadURL(`data:text/html,${encodeURIComponent(AD_LAYOUT_HTML)}`);
     const initialAdLayout = await adWindow.webContents.executeJavaScript(`({
       slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
