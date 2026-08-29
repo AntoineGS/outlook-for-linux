@@ -103,6 +103,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Run Outlook runtime renderer probe
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" npm run test:outlook-runtime-renderer
+
       - name: Install Playwright browsers
         run: ./node_modules/.bin/playwright install --with-deps chromium
 

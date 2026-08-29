@@ -53,6 +53,13 @@ describe('Outlook ad suppressor', () => {
     assert.match(style.textContent, /div:has\(> div\[id\^="owaadbar"\]\)/);
   });
 
+  it('reclaims the exact residual flex slot around the direct Outlook ad marker', () => {
+    assert.match(
+      outlookAdSuppressor.AD_SUPPRESSION_CSS,
+      /div:has\(> div > div > div\[id\^="owaadbar"\]\)/,
+    );
+  });
+
   it('does not use text, upsell, or size-only hiding rules', () => {
     const document = createFakeDocument();
 
