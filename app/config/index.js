@@ -44,13 +44,9 @@ function populateConfigObjectFromFile(configObject, configPath) {
     try {
       systemConfig = getSystemConfigFile();
       hasSystemConfig = true;
-      console.info(
-        "System-wide config loaded from /etc/outlook-for-linux/config.json"
-      );
+      console.info("System-wide configuration loaded");
     } catch (e) {
-      console.warn(
-        "Error loading system-wide config file, ignoring:\n" + e.message
-      );
+      console.warn("System-wide configuration could not be loaded; ignoring it");
     }
   }
 
@@ -61,10 +57,7 @@ function populateConfigObjectFromFile(configObject, configPath) {
       hasUserConfig = true;
     } catch (e) {
       configObject.configError = e.message;
-      console.warn(
-        "Error in user config file, using system config or defaults:\n" +
-          configObject.configError
-      );
+      console.warn("User configuration could not be loaded; using fallback configuration");
     }
   }
 
@@ -177,7 +170,6 @@ function argv(configPath, appVersion) {
     }
   }
 
-  console.info("configPath:", configPath);
   const loadedOptionCount = configObject.configFile && typeof configObject.configFile === 'object'
     ? Object.keys(configObject.configFile).length
     : 0;
