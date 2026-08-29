@@ -90,6 +90,9 @@
       "!docs/superpowers/plans{,/**/*}",
       "!docs/superpowers/specs{,/**/*}",
       "!docs/superpowers/reports{,/**/*}",
+      "!docs-site{,/**/*}",
+      "!scripts{,/**/*}",
+      "!app/assets/icons/T4L Logo 2024.zip",
       "!test-results{,/**/*}",
       "!playwright-report{,/**/*}"
     ],
