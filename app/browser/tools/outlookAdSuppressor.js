@@ -13,22 +13,4 @@ div:has(> div > div.fbAdLink),
 }
 `;
 
-function init(_config, rootDocument = globalThis.document) {
-  if (!rootDocument?.head || typeof rootDocument.head.appendChild !== 'function'
-    || typeof rootDocument.createElement !== 'function'
-    || typeof rootDocument.getElementById !== 'function') {
-    return false;
-  }
-
-  if (rootDocument.getElementById(STYLE_ID)) {
-    return true;
-  }
-
-  const style = rootDocument.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = AD_SUPPRESSION_CSS;
-  rootDocument.head.appendChild(style);
-  return true;
-}
-
-module.exports = { AD_SUPPRESSION_CSS, STYLE_ID, init };
+module.exports = { AD_SUPPRESSION_CSS, STYLE_ID };
