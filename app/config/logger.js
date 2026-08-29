@@ -31,7 +31,7 @@ exports.init = function (config) {
       mergeWith(log, config, (obj, src) =>
         typeof obj === "function" ? Object.assign(obj, src) : undefined,
       );
-      log.initialize();
+      log.initialize({ preload: false });
 
       // Add PII sanitization hook to all log transports
       log.hooks.push((message) => {
