@@ -46,6 +46,7 @@ module.exports = Object.freeze({
     customBackgrounds: false,
     customStickers: false,
     teamsAutomation: false,
+    settingsBackup: false,
   }),
   stripMcasSuffix,
   isAppHost: (hostname) => matchesHost(hostname, appHosts),

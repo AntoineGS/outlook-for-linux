@@ -63,7 +63,6 @@ describe('Outlook runtime boundary', () => {
     for (const name of [
       'zoom',
       'shortcuts',
-      'settings',
       'emulatePlatform',
        'webauthnOverride',
        'navigationButtons',
@@ -300,6 +299,10 @@ describe('Outlook runtime boundary', () => {
   });
 
   it('does not expose Teams-only menu entries', () => {
+    assert.match(
+      menuSource,
+      /\.\.\.\(product\.features\.settingsBackup\s*\?\s*\[getSettingsMenu\(Menus\)\]\s*:\s*\[\]\)/,
+    );
     for (const label of ['Join Meeting', 'Return to Teams', 'Quick Chat', 'Video']) {
       assert.doesNotMatch(menuSource, new RegExp(`label:\s*["']${label}["']`));
     }

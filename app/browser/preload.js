@@ -355,7 +355,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modules = [
       { name: "zoom", path: "./tools/zoom" },
       { name: "shortcuts", path: "./tools/shortcuts" },
-      { name: "settings", path: "./tools/settings" },
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
       { name: "navigationButtons", path: "./tools/navigationButtons" },
@@ -363,7 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
-    const modulesRequiringIpc = new Set(["settings", "webauthnOverride"]);
+    const modulesRequiringIpc = new Set(["webauthnOverride"]);
 
     let successCount = 0;
     for (const module of modules) {

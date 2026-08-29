@@ -7,8 +7,8 @@ const { join } = require('node:path');
 
 // Regression guard for the Outlook preload boundary. The
 // `modulesRequiringIpc` Set controls which generic browser-side modules receive
-// `ipcRenderer` during `init`; keeping the Outlook settings and WebAuthn
-// overrides in this set avoids silently dropping their IPC functionality.
+// `ipcRenderer` during `init`; keeping the WebAuthn override in this set avoids
+// silently dropping its IPC functionality.
 //
 // `preload.js` is an Electron preload script that can't be `require`d in
 // a plain Node test without stubbing the `electron` runtime. Parsing it
@@ -16,7 +16,7 @@ const { join } = require('node:path');
 // Set declaration is a stable invariant the Outlook runtime depends on.
 
 const PRELOAD_PATH = join(__dirname, '..', '..', 'app', 'browser', 'preload.js');
-const REQUIRED_MODULES = ['settings', 'webauthnOverride'];
+const REQUIRED_MODULES = ['webauthnOverride'];
 
 describe('preload.js modulesRequiringIpc Set', () => {
 	const source = readFileSync(PRELOAD_PATH, 'utf8');

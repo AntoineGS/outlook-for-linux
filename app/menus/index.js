@@ -17,7 +17,6 @@ const {
   clearStorageForPartitions,
 } = require("../utils/storagePartitions");
 const Tray = require("./tray");
-const { restoreSettingsFromFile } = require("./settings");
 const TrayIconChooser = require("../browser/tools/trayIconChooser");
 const { SpellCheckProvider } = require("../spellCheckProvider");
 const DocumentationWindow = require("../documentationWindow");
@@ -360,15 +359,18 @@ class Menus {
   }
 
   saveSettings() {
+    if (!product.features.settingsBackup) return;
     ipcMain.once(product.settingsChannels.get, saveSettingsInternal.bind(this));
     this.window.webContents.send(product.settingsChannels.get);
   }
 
   restoreSettings() {
+    if (!product.features.settingsBackup) return;
     const settingsPath = path.join(
       app.getPath("userData"),
       product.settingsFile
     );
+    const { restoreSettingsFromFile } = require("./settings");
     restoreSettingsFromFile({
       ipcMain,
       window: this.window,
