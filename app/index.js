@@ -25,6 +25,7 @@ const { registerGraphApiHandlers } = require("./graphApi/ipcHandlers");
 const { allowedChannels } = require("./security/ipcValidator");
 const { registerFeatureIpc } = require("./security/featureIpc");
 const { installIpcSecurity } = require("./security/ipcSecurity");
+const { projectRendererConfig } = require("./config/rendererConfig");
 const { sanitize: sanitizePii } = require("./utils/logSanitizer");
 const { register: registerGlobalShortcuts, sendKeyboardEventToWindow } = require("./globalShortcuts");
 const CommandLineManager = require("./startup/commandLine");
@@ -229,7 +230,7 @@ if (gotTheLock) {
   ipcMain.on("config-file-changed", restartApp);
   // Get current application configuration
   ipcMain.handle("get-config", async () => {
-    return config;
+    return projectRendererConfig(config);
   });
 
   notificationService.initialize();

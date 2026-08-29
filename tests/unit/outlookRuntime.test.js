@@ -97,6 +97,11 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
+  it('keeps get-config internal to preload without exposing a config bridge', () => {
+    assert.doesNotMatch(preloadSource, /getConfig:\s*\(\)\s*=>/);
+    assert.match(preloadSource, /ipcRenderer\.invoke\(["']get-config["']\)/);
+  });
+
   it('does not own Vim or ad suppression in preload', () => {
     assert.doesNotMatch(preloadSource, /vimBindings/);
     assert.doesNotMatch(preloadSource, /outlookAdSuppressor/);

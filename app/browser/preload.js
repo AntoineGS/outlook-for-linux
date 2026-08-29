@@ -62,8 +62,6 @@ try {
 
 // Note: IPC validation handled by main process, no need for duplicate validation here
 globalThis.electronAPI = {
-  getConfig: () => ipcRenderer.invoke("get-config"),
-
   showNotification: (options) => {
     if (!options || typeof options !== 'object') {
       return Promise.reject(new Error('Invalid notification options'));
