@@ -191,7 +191,7 @@ function buildObserverScript(gen, user, verifyMethod, autoSubmit) {
       // Email step only: advance once the email is in and no password field yet.
       if (!AUTO || !emailFilled || findPwd() || NS.next || nextAttempts >= 6) return;
       const btn = Array.from(document.querySelectorAll(SUBMIT_SEL)).find(editable);
-      if (btn) { activate(btn); NS.next = true; nextAttempts += 1; next = 'clicked'; }
+      if (btn) { btn.click(); NS.next = true; nextAttempts += 1; next = 'clicked'; }
     };
 
     let verify = VERIFY ? 'no-match' : 'skipped';
