@@ -1,4 +1,5 @@
 const { app } = require("electron");
+const product = require("../product");
 
 class CommandLineManager {
   // Must be called before app.getPath('userData')
@@ -161,23 +162,25 @@ class CommandLineManager {
 
   // Wayland display server configuration.
   // Handles three independent concerns:
-  //   1. PipeWire — always enabled for screen sharing
+  //   1. PipeWire — enabled when screen sharing is available
   //   2. GPU — auto-disabled unless user overrides or XWayland optimizations are on
-  //   3. Fake media UI — applied unless XWayland optimizations skip it
+  //   3. Fake media UI — enabled for screen sharing unless XWayland optimizations skip it
   static #configureWayland(config) {
-    // 1. PipeWire is always required for screen sharing on Wayland
-    if (app.commandLine.hasSwitch("enable-features")) {
-      const features = app.commandLine.getSwitchValue("enable-features").split(",");
-      if (!features.includes("WebRTCPipeWireCapturer")) {
-        console.warn(
-          "enable-features switch already set without WebRTCPipeWireCapturer. " +
-          "Screen sharing on Wayland may not work correctly. " +
-          "Please add WebRTCPipeWireCapturer to your enable-features list."
-        );
+    if (product.features.screenSharing) {
+      // 1. PipeWire is required for screen sharing on Wayland
+      if (app.commandLine.hasSwitch("enable-features")) {
+        const features = app.commandLine.getSwitchValue("enable-features").split(",");
+        if (!features.includes("WebRTCPipeWireCapturer")) {
+          console.warn(
+            "enable-features switch already set without WebRTCPipeWireCapturer. " +
+            "Screen sharing on Wayland may not work correctly. " +
+            "Please add WebRTCPipeWireCapturer to your enable-features list."
+          );
+        }
+      } else {
+        console.info("[Wayland] Enabling PipeWire for screen sharing");
+        app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
       }
-    } else {
-      console.info("[Wayland] Enabling PipeWire for screen sharing");
-      app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
     }
 
     // Detect XWayland: ozone-platform=x11 forces X11 rendering on a Wayland session.
@@ -202,10 +205,13 @@ class CommandLineManager {
       config.disableGpu = true;
     }
 
-    // 3. Fake media UI: needed for screen sharing (#2217), but breaks camera
-    //    under XWayland (#2169). Only skip when XWayland optimizations are on.
-    if (!xwaylandOptimizations) {
-      app.commandLine.appendSwitch("use-fake-ui-for-media-stream");
+    if (product.features.screenSharing) {
+      // 3. Fake media UI is needed for screen sharing (#2217), but breaks
+      //    camera under XWayland (#2169). Only skip when XWayland optimizations
+      //    are on.
+      if (!xwaylandOptimizations) {
+        app.commandLine.appendSwitch("use-fake-ui-for-media-stream");
+      }
     }
   }
 
