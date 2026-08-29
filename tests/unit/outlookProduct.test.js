@@ -47,6 +47,7 @@ describe("Outlook product contract", () => {
       customBackgrounds: false,
       customStickers: false,
       teamsAutomation: false,
+      settingsBackup: false,
     });
   });
 

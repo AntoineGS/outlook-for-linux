@@ -17,7 +17,7 @@ function fakeIpcMain() {
   };
 }
 
-describe('main-process Outlook settings restore', () => {
+describe('settings file restore helper', () => {
   it('does not retain acknowledgement listeners for failed restores', () => {
     const directory = mkdtempSync(join(tmpdir(), 'outlook-settings-'));
     const settingsPath = join(directory, 'outlook_settings.json');

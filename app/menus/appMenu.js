@@ -45,7 +45,7 @@ exports = module.exports = (Menus) => ({
     {
       type: "separator",
     },
-    getSettingsMenu(Menus),
+    ...(product.features.settingsBackup ? [getSettingsMenu(Menus)] : []),
     getAppIconMenu(Menus),
     getPreferencesMenu(),
     getNotificationsMenu(Menus),
