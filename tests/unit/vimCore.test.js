@@ -64,7 +64,7 @@ function createCore(behavior = {}) {
 }
 
 test('loads one pinned runtime Vim core instance', async () => {
-	assert.equal(packageJson.dependencies['@replit/codemirror-vim-core'], '0.1.0');
+	assert.equal(packageJson.devDependencies['@replit/codemirror-vim-core'], '0.1.0');
 	const [first, second] = await Promise.all([loadVimCore(), loadVimCore()]);
 	assert.equal(first, second);
 	const firstRuntime = first.createRuntime();

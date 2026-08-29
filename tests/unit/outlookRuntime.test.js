@@ -289,7 +289,7 @@ describe('Outlook runtime boundary', () => {
     assert.match(packageJson.scripts['prestart:dev'], /build:outlook-runtime/);
     assert.match(packageJson.scripts['pretest:e2e'], /build:outlook-runtime/);
     assert.match(packageJson.scripts['pretest:authenticated'], /build:outlook-runtime/);
-    assert.match(packageJson.scripts.prepack, /build:outlook-runtime/);
+    assert.equal(packageJson.scripts.prepack, undefined);
     assert.equal(packageJson.build.beforePack, 'scripts/buildOutlookBrowserRuntime.js');
     assert.match(readFileSync(join(ROOT, '.gitignore'), 'utf8'), /^\/app\/browser\/generated\/$/m);
   });
