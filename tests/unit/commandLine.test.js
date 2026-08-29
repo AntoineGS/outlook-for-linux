@@ -5,15 +5,18 @@ const assert = require('node:assert');
 
 const electronPath = require.resolve('electron');
 const commandLinePath = require.resolve('../../app/startup/commandLine');
+const productPath = require.resolve('../../app/product');
 
 const originalElectron = require.cache[electronPath];
+const originalProduct = require.cache[productPath];
 const originalPlatform = process.platform;
 const originalArch = process.arch;
+const originalSessionType = process.env.XDG_SESSION_TYPE;
 
 // Run CommandLineManager.addSwitchesAfterConfigLoad under a mocked Electron
 // `app.commandLine`, forced platform and arch, returning the list of switches
 // the manager appended as [name, value] pairs.
-function appendedSwitches(config, platform = 'darwin', arch = 'arm64') {
+function appendedSwitches(config, platform = 'darwin', arch = 'arm64', screenSharing = false) {
   const switches = [];
   const app = {
     commandLine: {
@@ -31,6 +34,12 @@ function appendedSwitches(config, platform = 'darwin', arch = 'arm64') {
     filename: electronPath,
     loaded: true,
     exports: { app },
+  };
+  require.cache[productPath] = {
+    id: productPath,
+    filename: productPath,
+    loaded: true,
+    exports: { features: { screenSharing } },
   };
   Object.defineProperty(process, 'platform', { value: platform, configurable: true });
   Object.defineProperty(process, 'arch', { value: arch, configurable: true });
@@ -54,10 +63,20 @@ describe('CommandLineManager macOS performance gate', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     Object.defineProperty(process, 'arch', { value: originalArch, configurable: true });
+    if (originalSessionType === undefined) {
+      delete process.env.XDG_SESSION_TYPE;
+    } else {
+      process.env.XDG_SESSION_TYPE = originalSessionType;
+    }
     if (originalElectron) {
       require.cache[electronPath] = originalElectron;
     } else {
       delete require.cache[electronPath];
+    }
+    if (originalProduct) {
+      require.cache[productPath] = originalProduct;
+    } else {
+      delete require.cache[productPath];
     }
     delete require.cache[commandLinePath];
   });
@@ -115,5 +134,29 @@ describe('CommandLineManager macOS performance gate', () => {
   it('does not apply the macOS switches on non-darwin platforms', () => {
     const switches = appendedSwitches({ authServerWhitelist: '*' }, 'linux');
     assert.ok(!hasSwitch(switches, 'use-angle'), 'mac perf path not taken off macOS');
+  });
+
+  it('gates Wayland screen-sharing switches without disabling the GPU workaround', () => {
+    process.env.XDG_SESSION_TYPE = 'wayland';
+
+    const withoutScreenSharing = appendedSwitches(
+      { authServerWhitelist: '*', wayland: {} },
+      'linux',
+      'x64',
+      false,
+    );
+    assert.ok(!hasSwitch(withoutScreenSharing, 'use-fake-ui-for-media-stream'));
+    assert.ok(!String(switchValue(withoutScreenSharing, 'enable-features')).includes('WebRTCPipeWireCapturer'));
+    assert.ok(hasSwitch(withoutScreenSharing, 'disable-gpu'));
+
+    const withScreenSharing = appendedSwitches(
+      { authServerWhitelist: '*', wayland: {} },
+      'linux',
+      'x64',
+      true,
+    );
+    assert.ok(hasSwitch(withScreenSharing, 'use-fake-ui-for-media-stream'));
+    assert.match(switchValue(withScreenSharing, 'enable-features'), /WebRTCPipeWireCapturer/);
+    assert.ok(hasSwitch(withScreenSharing, 'disable-gpu'));
   });
 });
