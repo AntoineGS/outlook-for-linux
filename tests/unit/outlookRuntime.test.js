@@ -87,6 +87,11 @@ describe('Outlook runtime boundary', () => {
     }
   });
 
+  it('keeps get-config internal to preload without exposing a config bridge', () => {
+    assert.doesNotMatch(preloadSource, /getConfig:\s*\(\)\s*=>/);
+    assert.match(preloadSource, /ipcRenderer\.invoke\(["']get-config["']\)/);
+  });
+
   it('does not own ad suppression in preload', () => {
     assert.doesNotMatch(preloadSource, /outlookAdSuppressor/);
   });

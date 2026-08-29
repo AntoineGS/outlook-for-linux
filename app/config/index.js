@@ -178,7 +178,10 @@ function argv(configPath, appVersion) {
   }
 
   console.info("configPath:", configPath);
-  console.debug("configFile:", configObject.configFile);
+  const loadedOptionCount = configObject.configFile && typeof configObject.configFile === 'object'
+    ? Object.keys(configObject.configFile).length
+    : 0;
+  console.debug('configFile:', { loaded: Boolean(configObject.isConfigFile), optionCount: loadedOptionCount });
 
   return config;
 }
