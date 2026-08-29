@@ -161,4 +161,4 @@ function validateConfigFile(configFile, optionDefinitions, runtimeProduct = null
   return warnings;
 }
 
-module.exports = { validateConfigFile };
+module.exports = { validateConfigFile, isPlainObject };
