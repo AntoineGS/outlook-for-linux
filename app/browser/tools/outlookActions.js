@@ -226,19 +226,28 @@ function actionForLabel(name, scope = MAIL_SCOPE_SELECTORS) {
   return (document) => Boolean(activateLabeledControls(getActionRoots(document, scope), ACTION_LABELS[name], name));
 }
 
+function commandToolbarAction(name) {
+  return (document) => {
+    const toolbar = getUniqueCommandToolbar(document);
+    return Boolean(toolbar && activateLabeledControls([toolbar], ACTION_LABELS[name], name));
+  };
+}
+
 function search(document) {
   const control = activateLabeledControls(getActionRoots(document, SEARCH_SCOPE_SELECTORS), ACTION_LABELS.search, 'search');
   if (!control) return false;
   const roots = getActionRoots(document, ['[role="search"]']);
-	let textboxes = [...new Set(roots.flatMap((root) => toArray(
-		root.querySelectorAll?.('[role="textbox"], [role="searchbox"], input[type="search"]'),
-	)))].filter((textbox) => typeof textbox.focus === 'function' && isVisible(textbox));
+  const textboxSelectors = ['[role="textbox"]', '[role="searchbox"]', 'input[type="search"]'];
+  let textboxes = [...new Set(roots.flatMap((root) => textboxSelectors.flatMap((selector) =>
+    toArray(root.querySelectorAll?.(selector)))))]
+    .filter((textbox) => typeof textbox.focus === 'function' && isVisible(textbox));
 	if (textboxes.length === 0 && document && typeof document.querySelectorAll === 'function') {
-		textboxes = [...new Set(toArray(document.querySelectorAll('[role="searchbox"], input[type="search"]')))]
+    textboxes = [...new Set(textboxSelectors.slice(1).flatMap((selector) =>
+      toArray(document.querySelectorAll(selector))))]
       .filter((textbox) => typeof textbox.focus === 'function' && isVisible(textbox));
   }
   if (textboxes.length === 1) textboxes[0].focus();
-  else logger.debug('search', 'absent');
+  else logger.debug('search', textboxes.length > 1 ? 'ambiguous' : 'absent');
   return true;
 }
 
@@ -273,7 +282,7 @@ function matchesNativeShortcut(id, event) {
 
 function isInPath(node, event, document) {
   const path = event?.composedPath?.();
-  if (Array.isArray(path) && path.includes(node)) return true;
+  if (Array.isArray(path) && path.some((entry) => entry === node || containsNode(node, entry))) return true;
   for (let current = event?.target || document?.activeElement; current; current = current.parentElement) {
     if (current === node) return true;
   }
@@ -336,7 +345,20 @@ function uniqueRoots(document, selectors, node, event) {
  */
 function resolveContext(document, event) {
   const node = focusNode(document, event);
-  if (hasGuardedContext(node)) return 'guarded';
+  const path = event?.composedPath?.() || [];
+  if (hasGuardedContext(node) || path.some(hasGuardedContext)) return 'guarded';
+  const globalLists = getActionRoots(document, ['[role="listbox"]']).filter((list) => {
+    if (isHidden(list) || hasContext(list, ['search', 'combobox', 'dialog'])) return false;
+    const rows = toArray(list.querySelectorAll?.('[role="option"]'));
+    return rows.length > 0 && (/\b(?:message|mail|inbox|sent|draft)\b/.test(normalizeLabel(getAttribute(list, 'aria-label')))
+      || rows.some((row) => /\b(?:unread|read)\b/.test(normalizeLabel(getAttribute(row, 'aria-label')))));
+  });
+  const globalSelected = globalLists.flatMap((list) => toArray(list.querySelectorAll?.('[role="option"]')))
+    .filter((row) => getAttribute(row, 'aria-selected') === 'true'
+      || toArray(row.querySelectorAll?.('input[type="checkbox"], [role="checkbox"]'))
+        .some((checkbox) => getAttribute(checkbox, 'aria-checked') === 'true' || checkbox.checked === true));
+  if (globalSelected.length > 1) return 'multi-selection';
+  if (globalLists.length > 1) return null;
   const active = document?.activeElement;
   if (event?.target && active && event.target !== active) {
     const semanticRoots = [
@@ -374,28 +396,39 @@ function replayFor(replayShortcut, id, document, event, legacy) {
 }
 
 function selectedState(row) {
-  const label = normalizeLabel(getAttribute(row, 'aria-label'));
-  const explicit = getAttribute(row, 'data-read-state');
-  const read = explicit || (label.includes('unread') ? 'unread' : label.includes('read') ? 'read' : null);
-  const flagged = getAttribute(row, 'aria-pressed') === 'true'
-    || /\bflagged?\b/.test(label) && !/unflag/.test(label);
-  return { read: read === 'read' ? true : read === 'unread' ? false : null, flagged };
+  const tokens = normalizeLabel(getAttribute(row, 'aria-label')).split(/[^a-z]+/).filter(Boolean);
+  const read = tokens.includes('unread') ? false : tokens.includes('read') ? true : null;
+  const flagged = tokens.includes('flagged') ? true : tokens.includes('unflagged') || tokens.includes('unstarred') ? false : null;
+  return { read, flagged };
 }
 
 function rowCheckbox(row) {
-  const controls = toArray(row?.querySelectorAll?.('input[type="checkbox"], [role="checkbox"]'))
-    .filter((control) => isVisible(control) && getAttribute(control, 'aria-disabled') !== 'true');
-  return controls.length === 1 ? controls[0] : null;
+  const controls = toArray(row?.querySelectorAll?.('input[type="checkbox"], [role="checkbox"]'));
+  if (controls.length !== 1) return { control: null, status: controls.length ? 'ambiguous' : 'absent' };
+  const control = controls[0];
+  if (!isVisible(control) || control.disabled || getAttribute(control, 'aria-disabled') === 'true') {
+    return { control: null, status: 'absent' };
+  }
+  return { control, status: null };
 }
 
-function selectMatchingRows(document, predicate) {
-  const rows = getMessageRows(document, 'selection');
-  let changed = false;
+function selectMatchingRows(document, predicate, actionId) {
+  const rows = getMessageRows(document, actionId);
+  const pending = [];
   for (const row of rows) {
     const state = selectedState(row);
     if (!predicate(row, state)) continue;
     const checkbox = rowCheckbox(row);
-    if (!checkbox || getAttribute(checkbox, 'aria-checked') === 'true' || checkbox.checked === true) continue;
+    if (checkbox.status) {
+      logger.debug(actionId, checkbox.status);
+      return false;
+    }
+    if (getAttribute(checkbox.control, 'aria-checked') !== 'true' && checkbox.control.checked !== true) {
+      pending.push(checkbox.control);
+    }
+  }
+  let changed = false;
+  for (const checkbox of pending) {
     checkbox.click();
     changed = true;
   }
@@ -403,11 +436,14 @@ function selectMatchingRows(document, predicate) {
 }
 
 function clearMultiSelection(document) {
-  const rows = getMessageRows(document, 'escape');
+  const rows = getActionRoots(document, ['[role="listbox"]']).flatMap((list) =>
+    toArray(list.querySelectorAll?.('[role="option"]')))
+    .filter((row) => getAttribute(row, 'aria-selected') === 'true'
+      || rowCheckbox(row).control && (getAttribute(rowCheckbox(row).control, 'aria-checked') === 'true'
+        || rowCheckbox(row).control.checked === true));
   let changed = false;
   for (const row of rows) {
-    if (getAttribute(row, 'aria-selected') !== 'true') continue;
-    const checkbox = rowCheckbox(row);
+    const checkbox = rowCheckbox(row).control;
     if (checkbox && getAttribute(checkbox, 'aria-checked') !== 'true' && checkbox.checked !== true) continue;
     checkbox?.click();
     changed = Boolean(checkbox) || changed;
@@ -421,9 +457,24 @@ function contextControl(document, labels, event) {
   return activateLabeledControls(reading, labels);
 }
 
-function adjacentConversationMessage(document, event, direction) {
-  const roots = getActionRoots(document, ['[role="region"]'])
+function activeReadingRoots(document, event) {
+  return getActionRoots(document, ['[role="region"]'])
     .filter((region) => isVisible(region) && isReadingRegion(region, event, document));
+}
+
+function isContextSignal(document, event) {
+  return Boolean(event?.target || document?.activeElement
+    || event?.composedPath?.()?.some(Boolean));
+}
+
+function isToolbarSurface(document, event) {
+  const target = focusNode(document, event);
+  return getActionRoots(document, ['[role="toolbar"]']).some((toolbar) =>
+    isVisible(toolbar) && containsNode(toolbar, target) && !hasGuardedContext(toolbar));
+}
+
+function adjacentConversationMessage(document, event, direction) {
+  const roots = activeReadingRoots(document, event);
   if (roots.length !== 1) return false;
   const messages = toArray(roots[0].querySelectorAll?.('[data-message-id], [role="article"]'))
     .filter(isVisible);
@@ -480,7 +531,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     drafts: actionForLabel('drafts', FOLDER_SCOPE_SELECTORS),
     allMail: actionForLabel('allMail', FOLDER_SCOPE_SELECTORS),
     tasks: actionForLabel('tasks', FOLDER_SCOPE_SELECTORS),
-    label: actionForLabel('label'),
+    label: commandToolbarAction('label'),
     composeMessage: native('compose', actionForLabel('compose')),
     openMessageNewWindow: native('openNewWindow', () => false),
     archiveMessage: native('archive', actionForLabel('archive')),
@@ -493,8 +544,8 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     replyNewWindow: scopedActionForLabel('replyNewWindow'),
     replyAllNewWindow: scopedActionForLabel('replyAllNewWindow'),
     forwardNewWindow: scopedActionForLabel('forwardNewWindow'),
-    undo: scopedActionForLabel('undo'),
-    redo: scopedActionForLabel('redo'),
+    undo: commandToolbarAction('undo'),
+    redo: commandToolbarAction('redo'),
   };
 
   actions.moveRight = (document, event) => {
@@ -548,25 +599,44 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     if (context === 'reading') return replayFor(replayShortcut, 'bottomMessage', document, event, () => false);
     return false;
   };
-  actions.selectAll = (document) => selectMatchingRows(document, () => true);
-  actions.selectRead = (document) => selectMatchingRows(document, (_row, state) => state.read === true);
-  actions.selectUnread = (document) => selectMatchingRows(document, (_row, state) => state.read === false);
-  actions.selectStarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === true);
-  actions.selectUnstarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === false);
+  actions.selectAll = (document) => selectMatchingRows(document, () => true, 'selectAll');
+  actions.selectRead = (document) => selectMatchingRows(document, (_row, state) => state.read === true, 'selectRead');
+  actions.selectUnread = (document) => selectMatchingRows(document, (_row, state) => state.read === false, 'selectUnread');
+  actions.selectStarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === true, 'selectStarred');
+  actions.selectUnstarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === false, 'selectUnstarred');
   actions.previousConversationMessage = (document, event) => {
     if (resolveContext(document, event) !== 'reading') return false;
-    return Boolean(activateLabeledControl(document, ['Previous message', 'Previous'], ['[role="region"]']))
+    return Boolean(activateLabeledControls(activeReadingRoots(document, event), ['Previous message', 'Previous'], 'previousConversationMessage'))
       || adjacentConversationMessage(document, event, -1);
   };
   actions.nextConversationMessage = (document, event) => {
     if (resolveContext(document, event) !== 'reading') return false;
-    return Boolean(activateLabeledControl(document, ['Next message', 'Next'], ['[role="region"]']))
+    return Boolean(activateLabeledControls(activeReadingRoots(document, event), ['Next message', 'Next'], 'nextConversationMessage'))
       || adjacentConversationMessage(document, event, 1);
   };
-  actions.nextPage = (document, event) => replayFor(replayShortcut, 'pageDown', document, event, () => false);
-  actions.previousPage = (document, event) => replayFor(replayShortcut, 'pageUp', document, event, () => false);
+  actions.nextPage = (document, event) => {
+    const context = resolveContext(document, event);
+    return ['message-list', 'reading'].includes(context)
+      ? replayFor(replayShortcut, 'pageDown', document, event, () => false) : false;
+  };
+  actions.previousPage = (document, event) => {
+    const context = resolveContext(document, event);
+    return ['message-list', 'reading'].includes(context)
+      ? replayFor(replayShortcut, 'pageUp', document, event, () => false) : false;
+  };
   actions.undoContext = actions.undo;
   actions.redoContext = actions.redo;
+
+  for (const [name, action] of Object.entries(actions)) {
+    if (name === 'resolveContext' || name === 'escapeContext' || name === '_test') continue;
+    actions[name] = (document, event) => {
+      if (event !== undefined && isContextSignal(document, event)) {
+        const context = resolveContext(document, event);
+        if (context === 'guarded' || (context === null && !isToolbarSurface(document, event))) return false;
+      }
+      return action(document, event);
+    };
+  }
 
   actions._test = {
     findLabeledControl,

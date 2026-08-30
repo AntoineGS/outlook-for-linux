@@ -727,16 +727,16 @@ test('scoped controls search selected message and reading region but reject ambi
     new Node('button', { 'aria-label': 'Undo' }),
   ]);
   const list = new Node('div', { role: 'listbox', 'aria-label': 'Mail' }, [selected]);
-  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
+  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+  const commandToolbar = new Node('div', { role: 'toolbar' }, [
+    new Node('button', { 'aria-label': 'New mail' }),
+    new Node('button', { 'aria-label': 'Undo' }),
     new Node('button', { 'aria-label': 'Redo' }),
   ]);
-  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
-  const document = documentWith(list, reading);
-
-  assert.equal(nativeActions.undo(document, {}), true);
-  assert.equal(selected.children[0].clickCount, 1);
-  assert.equal(nativeActions.redo(document, { target: reading.children[0] }), true);
-  assert.equal(reading.children[0].clickCount, 1);
+  assert.equal(nativeActions.undo(documentWith(commandToolbar), { target: commandToolbar.children[1] }), true);
+  assert.equal(commandToolbar.children[1].clickCount, 1);
+  assert.equal(nativeActions.redo(documentWith(commandToolbar), { target: commandToolbar.children[2] }), true);
+  assert.equal(commandToolbar.children[2].clickCount, 1);
 
   const duplicate = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
     new Node('button', { 'aria-label': 'Undo' }),
@@ -765,15 +765,16 @@ test('scoped controls reject navigation and calendar regions despite active focu
   }
 });
 
-const eventAt = (target) => ({ target, composedPath: () => [target] });
+const eventAt = (target, path = [target]) => ({ target, composedPath: () => path });
 
 const mailboxRow = ({ label = 'Read message', selected = 'false', read = 'read', flagged = null } = {}) => {
-  const attributes = { role: 'option', 'aria-label': label, 'aria-selected': selected };
+  const semanticLabel = label === 'Read message' && read === 'unread' ? 'Unread message'
+    : label === 'Read message' && read === 'unknown' ? 'Message' : label;
+  const attributes = { role: 'option', 'aria-label': semanticLabel, 'aria-selected': selected };
   if (flagged !== null) attributes['aria-pressed'] = String(flagged);
   const checkbox = new Node('input', { type: 'checkbox', 'aria-checked': selected });
   checkbox.checked = selected === 'true';
   const row = new Node('div', attributes, [checkbox]);
-  row.attributes['data-read-state'] = read;
   return row;
 };
 
@@ -856,7 +857,7 @@ test('folder destinations and label use exact visible controls', () => {
   const labels = ['Inbox', 'Flagged', 'Snoozed', 'Sent Items', 'Drafts', 'All Mail', 'Tasks'];
   const tree = new Node('div', { role: 'tree' }, labels.map(label => new Node('div', { role: 'treeitem', 'aria-label': label })));
   const label = new Node('button', { 'aria-label': 'Categories/Label' });
-  const toolbar = new Node('div', { role: 'toolbar' }, [label]);
+  const toolbar = new Node('div', { role: 'toolbar' }, [new Node('button', { 'aria-label': 'New mail' }), label]);
   const document = documentWith(tree, toolbar);
   for (const action of ['inbox', 'flagged', 'snoozed', 'sent', 'drafts', 'allMail', 'tasks']) assert.equal(actions[action](document), true);
   assert.equal(actions.label(document), true);
@@ -900,4 +901,165 @@ test('absent and ambiguous diagnostics expose only stable action id and status',
   } finally {
     actions._test.setLogger(previousLogger);
   }
+});
+
+test('global multi-selection wins over focused folder and ambiguous list roots', () => {
+  const selectedOne = mailboxRow({ selected: 'true' });
+  const selectedTwo = mailboxRow({ selected: 'true', label: 'Unread second', read: 'unread' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [selectedOne]);
+  const secondList = new Node('div', { role: 'listbox', 'aria-label': 'Sent messages' }, [selectedTwo]);
+  const folderItem = new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' });
+  const tree = new Node('div', { role: 'tree' }, [folderItem]);
+  const document = documentWith(list, secondList, tree);
+  assert.equal(actions.resolveContext(document, eventAt(folderItem)), 'multi-selection');
+  assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
+    .escapeContext(document, eventAt(folderItem)), true);
+  assert.equal(selectedOne.children[0].clickCount, 1);
+  assert.equal(selectedTwo.children[0].clickCount, 1);
+});
+
+test('selection filters use semantic tri-state ARIA tokens and never test-only state', () => {
+  const read = mailboxRow({ label: 'Read item', read: 'unknown' });
+  const unread = mailboxRow({ label: 'Unread item', read: 'unread' });
+  const flagged = mailboxRow({ label: 'Flagged item', read: 'unknown', flagged: true });
+  const unflagged = mailboxRow({ label: 'Unflagged item', read: 'unknown', flagged: false });
+  const unknown = mailboxRow({ label: 'Item', read: 'unknown' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [read, unread, flagged, unflagged, unknown]);
+  const document = documentWith(list);
+  assert.equal(actions.selectRead(document), true);
+  assert.equal(actions.selectUnread(document), true);
+  assert.equal(actions.selectStarred(document), true);
+  assert.equal(actions.selectUnstarred(document), true);
+  assert.equal(read.children[0].clickCount, 1);
+  assert.equal(unread.children[0].clickCount, 1);
+  assert.equal(flagged.children[0].clickCount, 1);
+  assert.equal(unflagged.children[0].clickCount, 1);
+  assert.equal(unknown.children[0].clickCount, 0);
+});
+
+test('conversation controls and label are limited to active reading or command toolbar scopes', () => {
+  const firstPrevious = new Node('button', { 'aria-label': 'Previous message' });
+  const secondPrevious = new Node('button', { 'aria-label': 'Previous message' });
+  const first = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [firstPrevious]);
+  const second = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [secondPrevious]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.previousConversationMessage(documentWith(first, second), eventAt(firstPrevious)), true);
+  assert.equal(firstPrevious.clickCount, 1);
+  assert.equal(secondPrevious.clickCount, 0);
+  assert.equal(vim.previousConversationMessage(documentWith(first, second), eventAt(new Node('button'))), false);
+
+  const label = new Node('button', { 'aria-label': 'Categories/Label' });
+  const undo = new Node('button', { 'aria-label': 'Undo' });
+  const redo = new Node('button', { 'aria-label': 'Redo' });
+  const compose = new Node('button', { 'aria-label': 'New mail' });
+  const toolbar = new Node('div', { role: 'toolbar' }, [compose, label, undo, redo]);
+  assert.equal(vim.label(documentWith(toolbar), eventAt(label)), true);
+  assert.equal(vim.undoContext(documentWith(toolbar), eventAt(undo)), true);
+  assert.equal(vim.redoContext(documentWith(toolbar), eventAt(redo)), true);
+  assert.equal(label.clickCount, 1);
+  assert.equal(undo.clickCount, 1);
+  assert.equal(redo.clickCount, 1);
+});
+
+test('guarded and unresolved contexts reject mailbox actions and escape only passes through guarded UI', () => {
+  const guarded = new Node('div', { role: 'dialog' }, [new Node('button', { 'aria-label': 'Archive' })]);
+  const unresolved = documentWith(new Node('div', { role: 'main' }, [new Node('button', { 'aria-label': 'Archive' })]));
+  const vim = actions.createOutlookActions({ replayShortcut: () => { throw new Error('unexpected replay'); } });
+  assert.equal(vim.escapeContext(documentWith(guarded), eventAt(guarded.children[0])), 'pass-through');
+  assert.equal(vim.escapeContext(unresolved, eventAt(unresolved.querySelector('[role="main"]'))), false);
+  assert.equal(vim.nextPage(unresolved, eventAt(unresolved.querySelector('[role="main"]'))), false);
+  assert.equal(vim.archive(unresolved, eventAt(unresolved.querySelector('[role="main"]'))), false);
+});
+
+test('row checkbox safety diagnoses absent, ambiguous, disabled, and preserves checked rows', () => {
+  const missing = mailboxRow({ read: 'read' });
+  missing.children = [];
+  const duplicate = mailboxRow({ read: 'unread' });
+  duplicate.children.push(new Node('input', { type: 'checkbox' }));
+  const disabled = mailboxRow({ read: 'read' });
+  disabled.children[0].attributes.disabled = '';
+  const checked = mailboxRow({ read: 'read', selected: 'true' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [missing, duplicate, disabled, checked]);
+  const entries = [];
+  const previousLogger = actions._test.setLogger({ debug: (...args) => entries.push(args) });
+  try {
+    assert.equal(actions.selectRead(documentWith(list)), false);
+    assert.equal(checked.children[0].clickCount, 0);
+    assert.deepEqual(entries, [['selectRead', 'absent']]);
+    entries.length = 0;
+    assert.equal(actions.selectUnread(documentWith(list)), false);
+    assert.deepEqual(entries, [['selectUnread', 'ambiguous']]);
+  } finally {
+    actions._test.setLogger(previousLogger);
+  }
+});
+
+test('guarded detection follows composed paths through shadow hosts and search ambiguity is diagnosed', () => {
+  const shadowHost = new Node('div', { role: 'search' });
+  const shadowTarget = new Node('button', { 'aria-label': 'Archive' });
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.archive(documentWith(shadowHost), eventAt(shadowTarget, [shadowTarget, shadowHost])), false);
+
+  const searchButton = new Node('button', { 'aria-label': 'Search' });
+  const first = new Node('input', { role: 'textbox' });
+  const second = new Node('input', { role: 'textbox' });
+  const search = new Node('div', { role: 'search' }, [searchButton, first, second]);
+  const entries = [];
+  const previousLogger = actions._test.setLogger({ debug: (...args) => entries.push(args) });
+  try {
+    assert.equal(actions.search(documentWith(search)), true);
+    assert.deepEqual(entries.at(-1), ['search', 'ambiguous']);
+  } finally {
+    actions._test.setLogger(previousLogger);
+  }
+});
+
+test('every Task 1 mailbox binding resolves to a callable action', () => {
+  const { MAILBOX_BINDINGS } = require('../../app/browser/tools/vimMailboxKeymap');
+  const missing = [...new Set(MAILBOX_BINDINGS.map(({ action }) => action))]
+    .filter(action => typeof actions[action] !== 'function');
+  assert.deepEqual(missing, []);
+});
+
+test('readContext replays markUnread for a semantically read selected row', () => {
+  const read = mailboxRow({ selected: 'true', label: 'Read message' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [read]);
+  const calls = [];
+  const vim = actions.createOutlookActions({ replayShortcut: id => { calls.push(id); return true; } });
+  assert.equal(vim.readContext(documentWith(list), eventAt(read)), true);
+  assert.deepEqual(calls, ['markUnread']);
+});
+
+test('moveRight opens a selected row and moveLeft collapses an expanded conversation', () => {
+  const row = mailboxRow({ selected: 'true' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.moveRight(documentWith(list), eventAt(row)), true);
+  assert.equal(row.clickCount, 1);
+  const disclosure = new Node('button', { 'aria-expanded': 'true' });
+  const expanded = mailboxRow({ selected: 'true' });
+  expanded.children.push(disclosure);
+  disclosure.parentElement = expanded;
+  const expandedList = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [expanded]);
+  assert.equal(vim.moveLeft(documentWith(expandedList), eventAt(expanded)), true);
+  assert.equal(disclosure.clickCount, 1);
+});
+
+test('conversation navigation uses semantic adjacent message fallback in one reading region', () => {
+  const first = new Node('div', { role: 'article' });
+  const second = new Node('div', { role: 'article' });
+  const region = new Node('div', { role: 'region', 'aria-label': 'Conversation view' }, [first, second]);
+  const document = documentWith(region);
+  document.activeElement = first;
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.nextConversationMessage(document, eventAt(first)), true);
+  assert.equal(second.clickCount, 1);
+});
+
+test('destination aliases reject absent and ambiguous tree items', () => {
+  assert.equal(actions.starred(documentWith(new Node('div', { role: 'tree' }))), false);
+  const first = new Node('div', { role: 'treeitem', 'aria-label': 'Flagged' });
+  const second = new Node('div', { role: 'treeitem', 'aria-label': 'Flagged' });
+  assert.equal(actions.starred(documentWith(new Node('div', { role: 'tree' }, [first, second]))), false);
+  assert.equal(first.clickCount + second.clickCount, 0);
 });
