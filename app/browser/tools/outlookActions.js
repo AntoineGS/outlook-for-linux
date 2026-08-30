@@ -6,6 +6,7 @@ const ACTION_LABELS = {
   back: ['Back', 'Close'],
   search: ['Search', 'Search for email, meetings, files and more.'],
   compose: ['New mail', 'New message', 'New email'],
+  composeNewTab: ['New mail in new window', 'New message in new window'],
   reply: ['Reply'],
   replyAll: ['Reply all'],
   forward: ['Forward'],
@@ -16,6 +17,11 @@ const ACTION_LABELS = {
   inbox: ['Inbox'],
   sent: ['Sent Items'],
   drafts: ['Drafts'],
+  replyNewWindow: ['Reply in new window'],
+  replyAllNewWindow: ['Reply all in new window'],
+  forwardNewWindow: ['Forward in new window'],
+  undo: ['Undo'],
+  redo: ['Redo', 'Repeat'],
 };
 const ACTION_CONTROL_SELECTORS = [
   'button',
@@ -179,8 +185,12 @@ function getActionRoots(document, selectors) {
 }
 
 function activateLabeledControl(document, labels, selectors = MAIL_SCOPE_SELECTORS) {
+  return activateLabeledControls(getActionRoots(document, selectors), labels);
+}
+
+function activateLabeledControls(roots, labels) {
   const matchesByControl = new Map();
-  for (const root of getActionRoots(document, selectors)) {
+  for (const root of roots) {
     for (const match of getLabeledMatches(root, labels)) {
       const previous = matchesByControl.get(match.control);
       if (!previous || match.rank < previous.rank) matchesByControl.set(match.control, match);
@@ -221,39 +231,93 @@ function search(document) {
   return true;
 }
 
-const actions = {
-  nextMessage: (document) => moveMessage(document, 1),
-  previousMessage: (document) => moveMessage(document, -1),
-  firstMessage: (document) => selectRow(getMessageRows(document)[0]),
-  lastMessage: (document) => {
-    const rows = getMessageRows(document);
-    return selectRow(rows[rows.length - 1]);
-  },
-  collapseConversation: (document) => setConversationState(document, false),
-  expandConversation: (document) => setConversationState(document, true),
-  openMessage: (document) => selectRow(getSelectedRow(document, getMessageRows(document))),
-  back: actionForLabel('back'),
-  search,
-  compose: actionForLabel('compose'),
-  reply: actionForLabel('reply'),
-  replyAll: actionForLabel('replyAll'),
-  forward: actionForLabel('forward'),
-  archive: actionForLabel('archive'),
-  deleteMessage: actionForLabel('deleteMessage'),
-  toggleRead: actionForLabel('toggleRead'),
-  toggleFlag: actionForLabel('toggleFlag'),
-  inbox: actionForLabel('inbox', FOLDER_SCOPE_SELECTORS),
-  sent: actionForLabel('sent', FOLDER_SCOPE_SELECTORS),
-  drafts: actionForLabel('drafts', FOLDER_SCOPE_SELECTORS),
-};
+function getUniqueCommandToolbar(document) {
+  const toolbars = getActionRoots(document, ['[role="toolbar"]']).filter(isVisible);
+  const candidates = toolbars.filter((toolbar) => {
+    const controls = [...new Set(getLabeledMatches(toolbar, ACTION_LABELS.compose)
+      .map(({ control }) => control))];
+    return controls.length === 1;
+  });
+  return candidates.length === 1 ? candidates[0] : null;
+}
 
-actions._test = {
-  findLabeledControl,
-  setLogger(nextLogger) {
-    const previous = logger;
-    logger = nextLogger;
-    return previous;
-  },
-};
+function getScopedActionRoots(document) {
+  const roots = [];
+  const rows = getMessageRows(document);
+  const selected = getSelectedRow(document, rows);
+  if (selected) roots.push(selected);
+  roots.push(...getActionRoots(document, ['[role="region"]']).filter(isVisible));
+  const commandToolbar = getUniqueCommandToolbar(document);
+  if (commandToolbar) roots.push(commandToolbar);
+  return [...new Set(roots)];
+}
+
+function scopedActionForLabel(name) {
+  return (document) => Boolean(activateLabeledControls(getScopedActionRoots(document), ACTION_LABELS[name]));
+}
+
+/**
+ * Creates Outlook actions with an injected shortcut replay boundary.
+ *
+ * @param {{replayShortcut?: (shortcutId: string, event: object) => boolean|string}} options
+ * @returns {Record<string, Function>}
+ */
+function createOutlookActions({ replayShortcut = () => false } = {}) {
+  const native = (id, legacy) => function nativeAction(document, event) {
+    return event === undefined ? legacy(document) : replayShortcut(id, event);
+  };
+
+  const actions = {
+    nextMessage: (document) => moveMessage(document, 1),
+    previousMessage: (document) => moveMessage(document, -1),
+    firstMessage: (document) => selectRow(getMessageRows(document)[0]),
+    lastMessage: (document) => {
+      const rows = getMessageRows(document);
+      return selectRow(rows[rows.length - 1]);
+    },
+    collapseConversation: (document) => setConversationState(document, false),
+    expandConversation: (document) => setConversationState(document, true),
+    openMessage: (document) => selectRow(getSelectedRow(document, getMessageRows(document))),
+    back: actionForLabel('back'),
+    search,
+    compose: actionForLabel('compose'),
+    reply: native('reply', actionForLabel('reply')),
+    replyAll: native('replyAll', actionForLabel('replyAll')),
+    forward: native('forward', actionForLabel('forward')),
+    archive: actionForLabel('archive'),
+    deleteMessage: native('delete', actionForLabel('deleteMessage')),
+    toggleRead: actionForLabel('toggleRead'),
+    toggleFlag: native('flag', actionForLabel('toggleFlag')),
+    inbox: actionForLabel('inbox', FOLDER_SCOPE_SELECTORS),
+    sent: actionForLabel('sent', FOLDER_SCOPE_SELECTORS),
+    drafts: actionForLabel('drafts', FOLDER_SCOPE_SELECTORS),
+    composeMessage: native('compose', actionForLabel('compose')),
+    openMessageNewWindow: native('openNewWindow', () => false),
+    archiveMessage: native('archive', actionForLabel('archive')),
+    permanentlyDeleteMessage: native('permanentDelete', () => false),
+    pageUp: native('pageUp', () => false),
+    pageDown: native('pageDown', () => false),
+    shortcutHelp: native('shortcutHelp', () => false),
+    composeNewTab: scopedActionForLabel('composeNewTab'),
+    replyNewWindow: scopedActionForLabel('replyNewWindow'),
+    replyAllNewWindow: scopedActionForLabel('replyAllNewWindow'),
+    forwardNewWindow: scopedActionForLabel('forwardNewWindow'),
+    undo: scopedActionForLabel('undo'),
+    redo: scopedActionForLabel('redo'),
+  };
+
+  actions._test = {
+    findLabeledControl,
+    setLogger(nextLogger) {
+      const previous = logger;
+      logger = nextLogger;
+      return previous;
+    },
+  };
+  return actions;
+}
+
+const actions = createOutlookActions();
+actions.createOutlookActions = createOutlookActions;
 
 module.exports = actions;

@@ -602,3 +602,90 @@ test('search refuses to focus when its context has multiple visible textboxes', 
   assert.equal(actions.search(documentWith(search)), true);
   assert.equal(first.focusCount + second.focusCount, 0);
 });
+
+const ROUTES = [
+  ['composeMessage', 'compose'],
+  ['openMessageNewWindow', 'openNewWindow'],
+  ['archiveMessage', 'archive'],
+  ['deleteMessage', 'delete'],
+  ['permanentlyDeleteMessage', 'permanentDelete'],
+  ['reply', 'reply'],
+  ['replyAll', 'replyAll'],
+  ['forward', 'forward'],
+  ['toggleFlag', 'flag'],
+  ['pageUp', 'pageUp'],
+  ['pageDown', 'pageDown'],
+  ['shortcutHelp', 'shortcutHelp'],
+];
+
+const eventFor = (key) => ({ key, keyCode: key });
+
+test('factory native routes delegate exactly once and preserve physical pass-through', () => {
+  const calls = [];
+  const nativeActions = actions.createOutlookActions({
+    replayShortcut(id, event) {
+      calls.push([id, event]);
+      return id === 'archive' || id === 'reply' || id === 'shortcutHelp' ? 'pass-through' : true;
+    },
+  });
+  const document = documentWith();
+
+  for (const [name, id] of ROUTES) {
+    const event = eventFor(name === 'archiveMessage' ? 'e' : name === 'reply' ? 'r' : name === 'shortcutHelp' ? '?' : name);
+    const result = nativeActions[name](document, event);
+    assert.equal(result, id === 'archive' || id === 'reply' || id === 'shortcutHelp' ? 'pass-through' : true);
+  }
+
+  assert.equal(calls.length, ROUTES.length);
+  assert.deepEqual(calls.map(([id]) => id), ROUTES.map(([, id]) => id));
+});
+
+test('native route methods pass through matching Outlook physical events without replay', () => {
+  const calls = [];
+  const nativeActions = actions.createOutlookActions({
+    replayShortcut(id, event) {
+      calls.push([id, event]);
+      return 'pass-through';
+    },
+  });
+  const document = documentWith();
+
+  assert.equal(nativeActions.archiveMessage(document, eventFor('e')), 'pass-through');
+  assert.equal(nativeActions.reply(document, eventFor('r')), 'pass-through');
+  assert.equal(nativeActions.shortcutHelp(document, eventFor('?')), 'pass-through');
+  assert.equal(calls.length, 3);
+});
+
+test('scoped controls use the uniquely identified command toolbar', () => {
+  const compose = new Node('button', { 'aria-label': 'New mail' });
+  const target = new Node('button', { 'aria-label': 'New mail in new window' });
+  const distractor = new Node('button', { 'aria-label': 'New mail in new window' });
+  const commandToolbar = new Node('div', { role: 'toolbar' }, [compose, target]);
+  const otherToolbar = new Node('div', { role: 'toolbar' }, [distractor]);
+  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+
+  assert.equal(nativeActions.composeNewTab(documentWith(commandToolbar, otherToolbar), {}), true);
+  assert.equal(target.clickCount, 1);
+  assert.equal(distractor.clickCount, 0);
+});
+
+test('scoped controls search selected message and reading region but reject ambiguity', () => {
+  const selected = new Node('div', { role: 'option', 'aria-selected': 'true' }, [
+    new Node('button', { 'aria-label': 'Undo' }),
+  ]);
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Mail' }, [selected]);
+  const reading = new Node('div', { role: 'region' }, [
+    new Node('button', { 'aria-label': 'Redo' }),
+  ]);
+  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+  const document = documentWith(list, reading);
+
+  assert.equal(nativeActions.undo(document, {}), true);
+  assert.equal(selected.children[0].clickCount, 1);
+  assert.equal(nativeActions.redo(document, {}), true);
+  assert.equal(reading.children[0].clickCount, 1);
+
+  const duplicate = new Node('div', { role: 'region' }, [new Node('button', { 'aria-label': 'Undo' })]);
+  assert.equal(nativeActions.undo(documentWith(list, duplicate), {}), false);
+  assert.equal(duplicate.children[0].clickCount, 0);
+});
