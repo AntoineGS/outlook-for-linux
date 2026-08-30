@@ -650,6 +650,45 @@ function createRichTextVimAdapter(root, options = {}) {
 			if (!(which in offsets)) throw new TypeError(`unknown cursor endpoint: ${which}`);
 			return posFromOffset(offsets[which]);
 		},
+		getCursorVisual() {
+			const current = currentOffsets();
+			if (current.anchorOffset !== current.headOffset || transaction?.virtual) return null;
+			const startOffset = current.headOffset;
+			const nextOffset = boundaries().find(boundary => boundary > startOffset);
+			const text = nextOffset === undefined ? '' : logicalText().slice(startOffset, nextOffset);
+			const atLineEnd = !text || text.includes('\n');
+			const endOffset = atLineEnd ? startOffset : nextOffset;
+			const start = domPoint(startOffset, 'forward');
+			const end = domPoint(endOffset, atLineEnd ? 'forward' : 'backward');
+			const range = document.createRange();
+			range.setStart(start.node, start.offset);
+			range.setEnd(end.node, end.offset);
+			let rect = range.getBoundingClientRect();
+			if (!logicalText() && rect.width === 0 && rect.height === 0) {
+				const rootRect = root.getBoundingClientRect?.();
+				const style = document.defaultView?.getComputedStyle?.(root);
+				if (rootRect && style) {
+					const pixels = value => Number.parseFloat(value) || 0;
+					const fontSize = pixels(style.fontSize) || 16;
+					const lineHeight = pixels(style.lineHeight) || fontSize * 1.2;
+					const left = rootRect.left + pixels(style.borderLeftWidth) + pixels(style.paddingLeft);
+					const top = rootRect.top + pixels(style.borderTopWidth) + pixels(style.paddingTop);
+					rect = { left, top, right: left, bottom: top + lineHeight, width: 0, height: lineHeight };
+				}
+			}
+			return {
+				text: atLineEnd ? '' : text,
+				atLineEnd,
+				rect: {
+					left: rect.left,
+					top: rect.top,
+					right: rect.right,
+					bottom: rect.bottom,
+					width: rect.width,
+					height: rect.height,
+				},
+			};
+		},
 		listSelections() {
 			const current = currentOffsets();
 			return [{ anchor: posFromOffset(current.anchorOffset), head: posFromOffset(current.headOffset) }];

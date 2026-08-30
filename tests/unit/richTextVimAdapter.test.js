@@ -11,9 +11,13 @@ const {
 	VimRollbackError,
 } = require('../../app/browser/tools/richTextVimAdapter');
 
-function createFixture({ text = 'alpha', anchor = 0, head = 0, html = '<b>alpha</b>' } = {}) {
+function createFixture({ text = 'alpha', anchor = 0, head = 0, html = '<b>alpha</b>',
+	rangeRect = { left: 10, top: 20, right: 18, bottom: 36, width: 8, height: 16 },
+	rootRect = { left: 30, top: 40, right: 230, bottom: 140, width: 200, height: 100 },
+	rootStyle = { paddingLeft: '0px', paddingTop: '0px', lineHeight: 'normal', fontSize: '16px' } } = {}) {
 	let currentText = text;
 	const listeners = new Map();
+	const ranges = [];
 	const selection = {
 		rangeCount: 1,
 		anchorNode: { ownerDocument: null },
@@ -33,7 +37,19 @@ function createFixture({ text = 'alpha', anchor = 0, head = 0, html = '<b>alpha<
 	const document = {
 		selection,
 		execCalls: [],
+		defaultView: { getComputedStyle: () => rootStyle },
 		getSelection() { return this.selection; },
+		createRange() {
+			const range = {
+				start: null,
+				end: null,
+				setStart(node, offset) { this.start = { node, offset }; },
+				setEnd(node, offset) { this.end = { node, offset }; },
+				getBoundingClientRect() { return rangeRect; },
+			};
+			ranges.push(range);
+			return range;
+		},
 		execCommand(command, _showUi, value) {
 			this.execCalls.push([command, value]);
 			return true;
@@ -44,6 +60,7 @@ function createFixture({ text = 'alpha', anchor = 0, head = 0, html = '<b>alpha<
 	root.innerHTML = html;
 	root.contains = node => node === root || node?.ownerDocument === document;
 	root.focus = () => { root.focused = true; };
+	root.getBoundingClientRect = () => rootRect;
 	root.addEventListener = (type, listener) => {
 		const current = listeners.get(type) || new Set();
 		current.add(listener);
@@ -69,7 +86,8 @@ function createFixture({ text = 'alpha', anchor = 0, head = 0, html = '<b>alpha<
 		toDomPoint(offset) { return { node: nodes[offset], offset: nodes[offset].offset }; },
 		crossesAtomic() { return false; },
 	});
-	return { root, document, selection, nodes, listeners, createPositionMap, setText: value => { currentText = value; } };
+	return { root, document, selection, nodes, listeners, ranges, createPositionMap,
+		setText: value => { currentText = value; } };
 }
 
 test('snapshots and restores adapter listener topology without sharing mutable sets', () => {
@@ -174,6 +192,56 @@ test('getCursor reads live anchor, head, start, and end endpoints', () => {
 	assert.equal(adapter.getCursor('end').ch, 3);
 	fixture.selection.setBaseAndExtent(fixture.nodes[0], 0, fixture.nodes[4], 4);
 	assert.equal(adapter.getCursor('head').ch, 4);
+});
+
+test('returns visual geometry for exactly one grapheme without changing selection', () => {
+	const fixture = createFixture({ text: 'a👩‍💻b', anchor: 1, head: 1 });
+	const baseCreatePositionMap = fixture.createPositionMap;
+	fixture.createPositionMap = () => ({
+		...baseCreatePositionMap(),
+		graphemeBoundaries: new Set([0, 1, 6, 7]),
+	});
+	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });
+
+	assert.deepEqual(adapter.getCursorVisual(), {
+		text: '👩‍💻',
+		atLineEnd: false,
+		rect: { left: 10, top: 20, right: 18, bottom: 36, width: 8, height: 16 },
+	});
+	assert.deepEqual(fixture.ranges[0].start, { node: fixture.nodes[1], offset: 1 });
+	assert.deepEqual(fixture.ranges[0].end, { node: fixture.nodes[6], offset: 6 });
+	assert.equal(fixture.selection.anchorNode, fixture.nodes[1]);
+	assert.equal(fixture.selection.focusNode, fixture.nodes[1]);
+});
+
+test('returns a collapsed blank visual at end of line', () => {
+	const fixture = createFixture({ text: 'ab\ncd', anchor: 2, head: 2 });
+	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });
+
+	const visual = adapter.getCursorVisual();
+
+	assert.equal(visual.text, '');
+	assert.equal(visual.atLineEnd, true);
+	assert.deepEqual(fixture.ranges[0].start, { node: fixture.nodes[2], offset: 2 });
+	assert.deepEqual(fixture.ranges[0].end, { node: fixture.nodes[2], offset: 2 });
+});
+
+test('anchors an empty editor cursor to its padded content box', () => {
+	const fixture = createFixture({
+		text: '',
+		anchor: 0,
+		head: 0,
+		rangeRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 },
+		rootRect: { left: 100, top: 200, right: 500, bottom: 300, width: 400, height: 100 },
+		rootStyle: { paddingLeft: '14px', paddingTop: '9px', lineHeight: '22px', fontSize: '16px' },
+	});
+	const adapter = createRichTextVimAdapter(fixture.root, { createPositionMap: fixture.createPositionMap });
+
+	assert.deepEqual(adapter.getCursorVisual(), {
+		text: '',
+		atLineEnd: true,
+		rect: { left: 114, top: 209, right: 114, bottom: 231, width: 0, height: 22 },
+	});
 });
 
 test('maps the linewise endpoint after the final line to document end', () => {

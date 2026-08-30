@@ -200,6 +200,159 @@ test('creates one normal-mode session per composer and renders an accessible bad
 	assert.equal(document.body.children.filter(child => child.getAttribute('data-vim-mode-badge') === 'true').length, 1);
 });
 
+test('renders a filled block cursor only in Normal mode and restores the native caret', async () => {
+	const document = createDocument();
+	const editor = createEditor(document);
+	document.defaultView.getComputedStyle = element => ({
+		color: element === editor ? 'rgb(245, 245, 245)' : 'rgb(230, 230, 230)',
+		backgroundColor: element === editor ? 'rgba(0, 0, 0, 0)' : 'rgb(32, 33, 36)',
+		fontFamily: 'sans-serif',
+		fontSize: '14px',
+		fontStyle: 'normal',
+		fontWeight: '400',
+		fontVariant: 'normal',
+	});
+	editor.style.caretColor = 'rgb(1, 2, 3)';
+	let mode = 'normal';
+	const adapter = {
+		state: { vim: {} },
+		getCursorVisual: () => ({
+			text: 'A',
+			atLineEnd: false,
+			rect: { left: 12, top: 24, right: 20, bottom: 40, width: 8, height: 16 },
+		}),
+		destroy() {},
+	};
+	const driver = {
+		handleKey: () => 'handled',
+		mode: () => mode,
+		destroy() {},
+	};
+	const controller = createVimEditing({
+		loadCore: () => core(),
+		document,
+		createAdapter: () => adapter,
+		createDriver: () => driver,
+		listenFocus: true,
+	});
+	document.activeElement = editor;
+	controller.init({ shortcuts: { vim: { enabled: true } } });
+
+	const cursor = () => document.body.children.find(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	);
+	assert.equal(cursor().textContent, 'A');
+	assert.equal(cursor().getAttribute('aria-hidden'), 'true');
+	assert.equal(cursor().style.position, 'fixed');
+	assert.equal(cursor().style.left, '12px');
+	assert.equal(cursor().style.top, '24px');
+	assert.equal(cursor().style.width, '8px');
+	assert.equal(cursor().style.height, '16px');
+	assert.equal(cursor().style.backgroundColor, 'rgb(245, 245, 245)');
+	assert.equal(cursor().style.color, 'rgb(32, 33, 36)');
+	assert.equal(editor.style.caretColor, 'transparent');
+	assert.equal(editor.contains(cursor()), false);
+
+	mode = 'insert';
+	controller.handleKeydown(event(editor));
+	assert.equal(cursor(), undefined);
+	assert.equal(editor.style.caretColor, 'rgb(1, 2, 3)');
+
+	mode = 'normal';
+	controller.handleKeydown(event(editor));
+	assert.ok(cursor());
+	assert.equal(editor.style.caretColor, 'transparent');
+
+	mode = 'visual';
+	controller.handleKeydown(event(editor));
+	assert.equal(cursor(), undefined);
+	assert.equal(editor.style.caretColor, 'rgb(1, 2, 3)');
+
+	mode = 'normal';
+	controller.handleKeydown(event(editor));
+	controller.destroy();
+	assert.equal(cursor(), undefined);
+	assert.equal(editor.style.caretColor, 'rgb(1, 2, 3)');
+});
+
+test('renders an end-of-line block and refreshes its geometry on scroll', () => {
+	const document = createDocument();
+	const editor = createEditor(document);
+	let visual = {
+		text: '',
+		atLineEnd: true,
+		rect: { left: 5, top: 7, right: 5, bottom: 27, width: 0, height: 20 },
+	};
+	const adapter = {
+		state: { vim: {} },
+		getCursorVisual: () => visual,
+		destroy() {},
+	};
+	const controller = createVimEditing({
+		loadCore: () => core(),
+		document,
+		createAdapter: () => adapter,
+		createDriver: () => createDriver('normal'),
+		listenFocus: true,
+	});
+	document.activeElement = editor;
+	controller.init({ shortcuts: { vim: { enabled: true } } });
+	const cursor = () => document.body.children.find(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	);
+
+	assert.equal(cursor().textContent, '\u00a0');
+	assert.equal(cursor().style.width, '12px');
+	visual = {
+		text: 'Z',
+		atLineEnd: false,
+		rect: { left: 30, top: 40, right: 39, bottom: 58, width: 9, height: 18 },
+	};
+	document.listeners.find(listener => listener.type === 'scroll').listener();
+	assert.equal(cursor().textContent, 'Z');
+	assert.equal(cursor().style.left, '30px');
+	assert.equal(cursor().style.top, '40px');
+	assert.equal(cursor().style.width, '9px');
+	assert.equal(cursor().style.height, '18px');
+});
+
+test('uses an opaque ancestor and contrasting fill when editor colors are transparent', () => {
+	const document = createDocument();
+	const editor = createEditor(document);
+	document.defaultView.getComputedStyle = element => {
+		if (element === editor) {
+			return { color: 'rgba(0, 0, 0, 0)', backgroundColor: 'rgba(20, 20, 20, 0.25)' };
+		}
+		if (element === editor.parentElement) {
+			return { color: 'rgb(230, 230, 230)', backgroundColor: 'rgba(25, 25, 25, 0.5)' };
+		}
+		return { color: 'rgb(230, 230, 230)', backgroundColor: 'rgb(30, 31, 34)' };
+	};
+	const controller = createVimEditing({
+		loadCore: () => core(),
+		document,
+		createAdapter: () => ({
+			state: { vim: {} },
+			getCursorVisual: () => ({
+				text: 'A',
+				atLineEnd: false,
+				rect: { left: 10, top: 20, right: 18, bottom: 36, width: 8, height: 16 },
+			}),
+			destroy() {},
+		}),
+		createDriver: () => createDriver('normal'),
+		listenFocus: true,
+	});
+	document.activeElement = editor;
+	controller.init({ shortcuts: { vim: { enabled: true } } });
+	const cursor = document.body.children.find(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	);
+
+	assert.equal(cursor.style.backgroundColor, 'rgb(255, 255, 255)');
+	assert.equal(cursor.style.color, 'rgb(30, 31, 34)');
+});
+
 test('passes mailbox events through and removes the badge on detach and destroy', async () => {
 	const document = createDocument();
 	const editor = createEditor(document);
@@ -535,6 +688,47 @@ test('uses the supplied iframe document for composer identity and session teardo
 	controller.destroyDocument(iframeDocument);
 	assert.equal(destroyed, 1);
 	assert.equal(controller.handleKeydown(event(editor), iframeDocument), 'handled');
+});
+
+test('restores the previous document cursor when switching composers across documents', () => {
+	const rootDocument = createDocument();
+	const iframeDocument = createDocument();
+	const rootEditor = createEditor(rootDocument, 'Root message body');
+	const iframeEditor = createEditor(iframeDocument, 'Iframe message body');
+	rootEditor.style.caretColor = 'root-caret';
+	iframeEditor.style.caretColor = 'iframe-caret';
+	const controller = createVimEditing({
+		loadCore: () => core(),
+		document: rootDocument,
+		createAdapter: editor => ({
+			state: { vim: {} },
+			getCursorVisual: () => ({
+				text: editor === rootEditor ? 'R' : 'I',
+				atLineEnd: false,
+				rect: { left: 10, top: 20, right: 18, bottom: 36, width: 8, height: 16 },
+			}),
+			destroy() {},
+		}),
+		createDriver: () => createDriver('normal'),
+	});
+	controller.init({ shortcuts: { vim: { enabled: true } } });
+	rootDocument.activeElement = rootEditor;
+	assert.equal(controller.handleKeydown(event(rootEditor), rootDocument), 'handled');
+	assert.equal(rootEditor.style.caretColor, 'transparent');
+	assert.ok(rootDocument.body.children.some(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	));
+
+	iframeDocument.activeElement = iframeEditor;
+	assert.equal(controller.handleKeydown(event(iframeEditor), iframeDocument), 'handled');
+	assert.equal(rootEditor.style.caretColor, 'root-caret');
+	assert.equal(rootDocument.body.children.some(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	), false);
+	assert.equal(iframeEditor.style.caretColor, 'transparent');
+	assert.ok(iframeDocument.body.children.some(
+		child => child.getAttribute('data-vim-block-cursor') === 'true',
+	));
 });
 
 test('passes every modified composer shortcut through before invoking Vim', () => {
