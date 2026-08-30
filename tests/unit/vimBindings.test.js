@@ -5,6 +5,7 @@ const {
 	isEditableEvent,
 	createVimBindings,
 } = require('../../app/browser/tools/vimBindings');
+const { MAILBOX_BINDINGS } = require('../../app/browser/tools/vimMailboxKeymap');
 
 function createEvent(key, overrides = {}) {
 	return Object.assign({
@@ -66,7 +67,7 @@ test('dispatches gg only after the second key', () => {
 	resolver.handleKeydown(first, {});
 	assert.deepEqual(calls, []);
 	resolver.handleKeydown(second, {});
-	assert.deepEqual(calls, ['firstMessage']);
+	assert.deepEqual(calls, ['startContext']);
 	for (const event of [first, second]) {
 		assert.equal(event.preventDefaultCalled, true);
 		assert.equal(event.stopPropagationCalled, true);
@@ -74,7 +75,7 @@ test('dispatches gg only after the second key', () => {
 });
 
 test('dispatches g-prefixed folder commands', () => {
-	for (const [key, action] of [['i', 'inbox'], ['s', 'sent'], ['d', 'drafts']]) {
+	for (const [key, action] of [['i', 'inbox'], ['s', 'starred'], ['d', 'drafts']]) {
 		const calls = [];
 		const resolver = createCommandResolver(createActions(calls));
 		const prefix = createEvent('g');
@@ -89,19 +90,22 @@ test('dispatches g-prefixed folder commands', () => {
 	}
 });
 
-test('dispatches every approved single-key command', () => {
-	const commands = [
-		['j', 'nextMessage'], ['k', 'previousMessage'], ['G', 'lastMessage'],
-		['h', 'collapseConversation'], ['l', 'expandConversation'], ['Enter', 'openMessage'],
-		['Escape', 'back'], ['u', 'back'], ['/', 'search'], ['c', 'compose'],
-		['r', 'reply'], ['a', 'replyAll'], ['f', 'forward'], ['e', 'archive'],
-		['d', 'deleteMessage'], ['q', 'toggleRead'], ['s', 'toggleFlag']
-	];
-
-	for (const [key, action] of commands) {
+test('dispatches every g and v command', () => {
+	for (const { sequence, action } of MAILBOX_BINDINGS.filter(({ sequence }) =>
+		sequence.startsWith('g') || sequence.startsWith('v'))) {
 		const calls = [];
 		const resolver = createCommandResolver(createActions(calls));
-		const event = createEvent(key);
+		resolver.handleKeydown(createEvent(sequence[0]), {});
+		resolver.handleKeydown(createEvent(sequence[1]), {});
+		assert.deepEqual(calls, [action]);
+	}
+});
+
+test('dispatches every approved single-key command', () => {
+	for (const { sequence, action } of MAILBOX_BINDINGS.filter(({ sequence }) => sequence.length === 1)) {
+		const calls = [];
+		const resolver = createCommandResolver(createActions(calls));
+		const event = createEvent(sequence);
 		resolver.handleKeydown(event, {});
 		assert.deepEqual(calls, [action]);
 		assert.equal(event.preventDefaultCalled, true);
@@ -109,16 +113,18 @@ test('dispatches every approved single-key command', () => {
 	}
 });
 
-test('dispatches o to openMessage', () => {
+test('dispatches o and Enter to moveRight', () => {
+	for (const key of ['o', 'Enter']) {
 	const calls = [];
 	const resolver = createCommandResolver(createActions(calls));
-	const event = createEvent('o');
+	const event = createEvent(key);
 
 	resolver.handleKeydown(event, {});
 
-	assert.deepEqual(calls, ['openMessage']);
+	assert.deepEqual(calls, ['moveRight']);
 	assert.equal(event.preventDefaultCalled, true);
 	assert.equal(event.stopPropagationCalled, true);
+	}
 });
 
 test('an unknown second key resets g without consuming that key', () => {
@@ -133,8 +139,15 @@ test('an unknown second key resets g without consuming that key', () => {
 	assert.deepEqual(calls, []);
 });
 
-test('does not intercept Ctrl, Alt, or Meta modified keys', () => {
-	for (const modifier of ['ctrlKey', 'altKey', 'metaKey']) {
+test('dispatches exact Ctrl bindings and passes through other modifiers', () => {
+	for (const [key, action] of [['r', 'redoContext'], ['u', 'pageUp'], ['d', 'pageDown']]) {
+		const calls = [];
+		const resolver = createCommandResolver(createActions(calls));
+		const event = createEvent(key, { ctrlKey: true });
+		assert.equal(resolver.handleKeydown(event, {}), true);
+		assert.deepEqual(calls, [action]);
+	}
+	for (const modifier of ['altKey', 'metaKey']) {
 		const calls = [];
 		const resolver = createCommandResolver(createActions(calls));
 		const event = createEvent('j', { [modifier]: true });
@@ -145,24 +158,28 @@ test('does not intercept Ctrl, Alt, or Meta modified keys', () => {
 	}
 });
 
-test('passes through Shift except for semantic G and slash bindings', () => {
-	for (const key of ['Enter', 'Escape']) {
-		const calls = [];
-		const resolver = createCommandResolver(createActions(calls));
-		const event = createEvent(key, { shiftKey: true });
+test('does not consume an action that explicitly passes through', () => {
+	const event = createEvent('j');
+	const calls = [];
+	const actions = new Proxy({}, {
+		get: (_, name) => (document, receivedEvent) => {
+			calls.push([name, document, receivedEvent]);
+			return 'pass-through';
+		}
+	});
+	const resolver = createCommandResolver(actions);
+	const document = {};
 
-		assert.equal(resolver.handleKeydown(event, {}), false);
-		assert.deepEqual(calls, []);
-		assert.equal(event.preventDefaultCalled, false);
+	assert.equal(resolver.handleKeydown(event, document), false);
+	assert.deepEqual(calls, [['nextMessage', document, event]]);
+	assert.equal(event.preventDefaultCalled, false);
+	assert.equal(event.stopPropagationCalled, false);
+});
 
-		const pendingCalls = [];
-		const pendingResolver = createCommandResolver(createActions(pendingCalls));
-		pendingResolver.handleKeydown(createEvent('g'), {});
-		assert.equal(pendingResolver.handleKeydown(createEvent(key, { shiftKey: true }), {}), false);
-		assert.deepEqual(pendingCalls, []);
-	}
-
-	for (const [key, action] of [['G', 'lastMessage'], ['/', 'search']]) {
+test('dispatches uppercase commands from shifted event keys', () => {
+	for (const [key, action] of [['C', 'composeMessageNewTab'], ['O', 'openMessageNewWindow'],
+		['D', 'permanentlyDeleteMessage'], ['R', 'replyNewWindow'], ['A', 'replyAllNewWindow'],
+		['F', 'forwardNewWindow'], ['G', 'endContext'], ['?', 'shortcutHelp']]) {
 		const calls = [];
 		const resolver = createCommandResolver(createActions(calls));
 		const event = createEvent(key, { shiftKey: true });
@@ -234,7 +251,7 @@ test('resets a pending g prefix after modified and guarded events', () => {
 		resolver.handleKeydown(createEvent('g'), {});
 		assert.deepEqual(calls, []);
 		resolver.handleKeydown(createEvent('g'), {});
-		assert.deepEqual(calls, ['firstMessage']);
+		assert.deepEqual(calls, ['startContext']);
 	}
 });
 

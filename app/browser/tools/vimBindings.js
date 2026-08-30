@@ -1,29 +1,9 @@
 const PREFIX_TIMEOUT_MS = 1000;
-const SINGLE_KEY_ACTIONS = {
-	j: 'nextMessage',
-	k: 'previousMessage',
-	G: 'lastMessage',
-	h: 'collapseConversation',
-	l: 'expandConversation',
-	Enter: 'openMessage',
-	o: 'openMessage',
-	Escape: 'back',
-	u: 'back',
-	'/': 'search',
-	c: 'compose',
-	r: 'reply',
-	a: 'replyAll',
-	f: 'forward',
-	e: 'archive',
-	d: 'deleteMessage',
-	q: 'toggleRead',
-	s: 'toggleFlag'
-};
-const G_PREFIX_ACTIONS = { g: 'firstMessage', i: 'inbox', s: 'sent', d: 'drafts' };
 const GUARDED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'DIALOG']);
 const GUARDED_ROLES = new Set(['textbox', 'searchbox', 'combobox', 'dialog']);
 const outlookActions = require('./outlookActions');
 const { createVimEditing } = require('./vimEditing');
+const { lookupMailboxCommand } = require('./vimMailboxKeymap');
 
 function isGuardedNode(node) {
 	if (!node || typeof node !== 'object') return false;
@@ -66,42 +46,27 @@ function createCommandResolver(actions, clock = {}) {
 		event.stopPropagation();
 	}
 
-	function dispatch(actionName, event, document) {
-		reset();
-		consume(event);
-		return actions[actionName](document);
-	}
-
 	function handleKeydown(event, document) {
-		if (event.ctrlKey || event.altKey || event.metaKey || isEditableEvent(event, document)) {
+		if (isEditableEvent(event, document)) {
 			reset();
 			return false;
 		}
-		if (event.shiftKey && event.key !== 'G' && event.key !== '/') {
-			reset();
-			return false;
-		}
-		if (event.shiftKey && (event.key === 'G' || event.key === '/')) {
-			const actionName = SINGLE_KEY_ACTIONS[event.key];
-			return actionName ? dispatch(actionName, event, document) : false;
-		}
-
-		if (prefix === 'g') {
-			const actionName = G_PREFIX_ACTIONS[event.key];
-			if (actionName) return dispatch(actionName, event, document);
-			reset();
-			return false;
-		}
-
-		if (event.key === 'g') {
-			prefix = 'g';
+		const result = lookupMailboxCommand(event, prefix);
+		if (result.nextPrefix) {
+			prefix = result.nextPrefix;
 			prefixTimer = setTimeoutFn(reset, PREFIX_TIMEOUT_MS);
 			consume(event);
 			return true;
 		}
-
-		const actionName = SINGLE_KEY_ACTIONS[event.key];
-		return actionName ? dispatch(actionName, event, document) : false;
+		if (!result.action) {
+			reset();
+			return false;
+		}
+		reset();
+		const outcome = actions[result.action](document, event);
+		if (outcome === 'pass-through') return false;
+		consume(event);
+		return true;
 	}
 
 	return { handleKeydown, reset };
