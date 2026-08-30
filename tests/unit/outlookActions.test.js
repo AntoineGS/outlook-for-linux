@@ -654,9 +654,9 @@ test('native route methods pass through matching Outlook physical events without
   });
   const document = documentWith();
 
-  assert.equal(nativeActions.archiveMessage(document, eventFor('e')), 'pass-through');
-  assert.equal(nativeActions.reply(document, eventFor('r')), 'pass-through');
-  assert.equal(nativeActions.shortcutHelp(document, eventFor('?')), 'pass-through');
+  assert.equal(nativeActions.archiveMessage(document, { key: 'e', keyCode: 69 }), 'pass-through');
+  assert.equal(nativeActions.reply(document, { key: 'r', keyCode: 82 }), 'pass-through');
+  assert.equal(nativeActions.shortcutHelp(document, { key: '?', keyCode: 191, shiftKey: true }), 'pass-through');
   assert.equal(calls.length, 0);
 });
 
@@ -669,9 +669,9 @@ test('native pass-through requires an exact physical modifier set', () => {
     },
   });
 
-  assert.equal(nativeActions.archiveMessage(documentWith(), { key: 'e', ctrlKey: true }), true);
-  assert.equal(nativeActions.reply(documentWith(), { key: 'r', shiftKey: true }), true);
-  assert.equal(nativeActions.shortcutHelp(documentWith(), { key: '?', altKey: true }), true);
+  assert.equal(nativeActions.archiveMessage(documentWith(), { key: 'e', keyCode: 69, ctrlKey: true }), true);
+  assert.equal(nativeActions.reply(documentWith(), { key: 'r', keyCode: 82, shiftKey: true }), true);
+  assert.equal(nativeActions.shortcutHelp(documentWith(), { key: '?', keyCode: 191, shiftKey: true, altKey: true }), true);
   assert.deepEqual(calls.map(([id]) => id), ['archive', 'reply', 'shortcutHelp']);
 });
 
@@ -748,4 +748,15 @@ test('scoped controls reject unrelated visible regions', () => {
 
   assert.equal(nativeActions.undo(documentWith(unrelated), { target: control }), false);
   assert.equal(control.clickCount, 0);
+});
+
+test('scoped controls reject navigation and calendar regions despite active focus', () => {
+  for (const label of ['Mail navigation', 'Calendar content']) {
+    const control = new Node('button', { 'aria-label': 'Undo' });
+    const region = new Node('div', { role: 'region', 'aria-label': label }, [control]);
+    const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+
+    assert.equal(nativeActions.undo(documentWith(region), { target: control }), false);
+    assert.equal(control.clickCount, 0);
+  }
 });

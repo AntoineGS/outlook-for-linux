@@ -255,7 +255,9 @@ function eventModifiers(event) {
 function matchesNativeShortcut(id, event) {
   const shortcut = NATIVE_SHORTCUTS[id];
   if (!shortcut) return false;
-  const key = String(event?.keyCode || event?.key || '').toLowerCase();
+  const keyCodeFallbacks = { 69: 'e', 82: 'r', 191: '/' };
+  const semanticKey = event?.key || keyCodeFallbacks[event?.keyCode] || event?.keyCode;
+  const key = String(semanticKey || '').toLowerCase();
   const expectedKey = shortcut.keyCode === '/' && key === '?' ? '/' : key;
   return expectedKey === shortcut.keyCode
     && eventModifiers(event).length === shortcut.modifiers.length
@@ -273,7 +275,7 @@ function isInPath(node, event, document) {
 
 function isReadingRegion(region, event, document) {
   const label = normalizeLabel(getAttribute(region, 'aria-label'));
-  return /\b(?:message|mail|reading|conversation|content)\b/.test(label)
+  return /\b(?:reading(?:\s+pane)?|message(?:\s+(?:reading|pane|content))?|conversation(?:\s+(?:view|pane|content))?)\b/.test(label)
     && isInPath(region, event, document);
 }
 
