@@ -59,79 +59,137 @@ describe('ssoPasswordPrefill.isLoginUrl', () => {
   });
 });
 
-describe('ssoPasswordPrefill.attach', () => {
-  it('uses native button activation to submit the Microsoft email step', async () => {
-    let submitted = false;
+async function runEmailStep({
+  nextAriaDisabled = false,
+  nextDisabledAncestor = false,
+  passwordHiddenAncestor = false,
+  passwordOpacity = '0',
+} = {}) {
+  let submitted = false;
 
-    class FakeInput {
-      constructor() {
-        this.offsetParent = {};
-        this.disabled = false;
-        this.readOnly = false;
-        this.value = '';
-      }
-
-      focus() {}
-      dispatchEvent() {}
-      getClientRects() { return [1]; }
+  class FakeInput {
+    constructor() {
+      this.offsetParent = {};
+      this.parentElement = null;
+      this.disabled = false;
+      this.readOnly = false;
+      this.value = '';
     }
 
-    const emailInput = new FakeInput();
-    const nextButton = {
-      offsetParent: {},
-      disabled: false,
-      readOnly: false,
-      focus() {},
-      getClientRects() { return [1]; },
-      dispatchEvent() {},
-      click() { submitted = true; },
-    };
-    const document = {
-      documentElement: {},
-      querySelector(selector) {
-        if (selector === '#tilesHolder') return null;
-        return null;
-      },
-      querySelectorAll(selector) {
-        if (selector.includes('input[type=email]')) return [emailInput];
-        if (selector.includes('#idSIButton9')) return [nextButton];
-        return [];
-      },
-    };
-    const window = { HTMLInputElement: FakeInput };
-    window.window = window;
+    focus() {}
+    dispatchEvent() {}
+    getAttribute() { return null; }
+    getClientRects() { return [1]; }
+  }
 
-    const context = {
-      window,
-      document,
-      Event: class Event {},
-      MouseEvent: class MouseEvent {},
-      MutationObserver: class MutationObserver {
-        observe() {}
-        disconnect() {}
-      },
-      setInterval: () => 1,
-      clearInterval() {},
-      setTimeout: () => 2,
-      clearTimeout() {},
-    };
-    const frame = {
-      url: 'https://login.microsoftonline.com/common/oauth2/authorize',
-      executeJavaScript(script) {
-        return vm.runInNewContext(script, context);
-      },
-    };
-    const webContents = new EventEmitter();
-    webContents.mainFrame = { framesInSubtree: [frame] };
+  const emailInput = new FakeInput();
+  const hiddenPassword = new FakeInput();
+  hiddenPassword.offsetParent = null;
+  hiddenPassword.parentElement = passwordHiddenAncestor
+    ? { hidden: true, parentElement: null }
+    : null;
+  const nextButton = {
+    offsetParent: {},
+    parentElement: nextDisabledAncestor
+      ? { disabled: true, parentElement: null }
+      : null,
+    disabled: false,
+    readOnly: false,
+    focus() {},
+    getAttribute(name) {
+      return name === 'aria-disabled' && nextAriaDisabled ? 'true' : null;
+    },
+    getClientRects() { return [1]; },
+    dispatchEvent() {},
+    click() { submitted = true; },
+  };
+  const document = {
+    documentElement: {},
+    querySelector(selector) {
+      if (selector === '#tilesHolder') return null;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === 'input[type=password]') return [hiddenPassword];
+      if (selector.includes('input[type=email]')) return [emailInput];
+      if (selector.includes('#idSIButton9')) return [nextButton];
+      return [];
+    },
+  };
+  const window = {
+    HTMLInputElement: FakeInput,
+    getComputedStyle(element) {
+      return {
+        display: 'block',
+        visibility: 'visible',
+        opacity: element === hiddenPassword ? passwordOpacity : '1',
+      };
+    },
+  };
+  window.window = window;
 
-    attach(
-      { webContents },
-      { auth: { webLogin: { user: 'person@example.com', autoSubmit: true } } },
-    );
-    webContents.emit('dom-ready');
-    await new Promise((resolve) => setImmediate(resolve));
+  const context = {
+    window,
+    document,
+    Event: class Event {},
+    MouseEvent: class MouseEvent {},
+    MutationObserver: class MutationObserver {
+      observe() {}
+      disconnect() {}
+    },
+    setInterval: () => 1,
+    clearInterval() {},
+    setTimeout: () => 2,
+    clearTimeout() {},
+  };
+  const frame = {
+    url: 'https://login.microsoftonline.com/common/oauth2/authorize',
+    executeJavaScript(script) {
+      return vm.runInNewContext(script, context);
+    },
+  };
+  const webContents = new EventEmitter();
+  webContents.mainFrame = { framesInSubtree: [frame] };
 
-    assert.strictEqual(emailInput.value, 'person@example.com');
-    assert.strictEqual(submitted, true);
+  attach(
+    { webContents },
+    { auth: { webLogin: { user: 'person@example.com', autoSubmit: true } } },
+  );
+  webContents.emit('dom-ready');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  return { email: emailInput.value, submitted };
+}
+
+describe('ssoPasswordPrefill.attach', () => {
+  it('ignores an opacity-hidden password input and submits the email step', async () => {
+    const result = await runEmailStep();
+
+    assert.strictEqual(result.email, 'person@example.com');
+    assert.strictEqual(result.submitted, true);
+  });
+
+  it('does not activate an aria-disabled submit control', async () => {
+    const result = await runEmailStep({ nextAriaDisabled: true });
+
+    assert.strictEqual(result.email, 'person@example.com');
+    assert.strictEqual(result.submitted, false);
+  });
+
+  it('ignores a password input under a hidden ancestor', async () => {
+    const result = await runEmailStep({
+      passwordHiddenAncestor: true,
+      passwordOpacity: '1',
+    });
+
+    assert.strictEqual(result.email, 'person@example.com');
+    assert.strictEqual(result.submitted, true);
+  });
+
+  it('does not activate a submit control under a disabled ancestor', async () => {
+    const result = await runEmailStep({ nextDisabledAncestor: true });
+
+    assert.strictEqual(result.email, 'person@example.com');
+    assert.strictEqual(result.submitted, false);
   });
 });
