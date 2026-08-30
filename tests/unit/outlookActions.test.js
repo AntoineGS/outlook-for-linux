@@ -36,6 +36,8 @@ class Node {
     const disabled = selector.includes('[aria-disabled="true"]');
     const textbox = selector.includes('[contenteditable="true"]');
     const searchInput = selector.includes('[type="search"]');
+    const checkbox = selector.includes('[type="checkbox"]');
+    const checked = selector.match(/\[aria-checked="([^"]+)"\]/)?.[1];
     const hasLabel = selector === '[aria-label]';
     const tag = selector.match(/^[a-z]+/i)?.[0];
     return (!tag || this.tagName === tag.toUpperCase())
@@ -45,7 +47,9 @@ class Node {
       && (!label || this.getAttribute('aria-label') === label)
       && (!disabled || this.getAttribute('aria-disabled') === 'true')
       && (!textbox || this.getAttribute('contenteditable') === 'true')
-      && (!searchInput || this.getAttribute('type') === 'search');
+      && (!searchInput || this.getAttribute('type') === 'search')
+      && (!checkbox || this.getAttribute('type') === 'checkbox')
+      && (!checked || this.getAttribute('aria-checked') === checked);
   }
 
   closest(selector) {
@@ -587,7 +591,7 @@ test('message-list diagnostics distinguish absent and ambiguous candidates', () 
     const first = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [option('Read one', 'true')]);
     const second = new Node('div', { role: 'listbox', 'aria-label': 'Sent mail' }, [option('Read two')]);
     assert.equal(actions.nextMessage(documentWith(first, second)), false);
-    assert.deepEqual(messages, ['Message list is absent', 'Message list is ambiguous']);
+    assert.deepEqual(messages, ['message-list absent', 'message-list ambiguous']);
   } finally {
     assert.equal(actions._test.setLogger(previousLogger).debug instanceof Function, true);
   }
@@ -758,5 +762,142 @@ test('scoped controls reject navigation and calendar regions despite active focu
 
     assert.equal(nativeActions.undo(documentWith(region), { target: control }), false);
     assert.equal(control.clickCount, 0);
+  }
+});
+
+const eventAt = (target) => ({ target, composedPath: () => [target] });
+
+const mailboxRow = ({ label = 'Read message', selected = 'false', read = 'read', flagged = null } = {}) => {
+  const attributes = { role: 'option', 'aria-label': label, 'aria-selected': selected };
+  if (flagged !== null) attributes['aria-pressed'] = String(flagged);
+  const checkbox = new Node('input', { type: 'checkbox', 'aria-checked': selected });
+  checkbox.checked = selected === 'true';
+  const row = new Node('div', attributes, [checkbox]);
+  row.attributes['data-read-state'] = read;
+  return row;
+};
+
+test('resolveContext applies guarded, multi-selection, folder, list, reading precedence', () => {
+  const search = new Node('div', { role: 'search' });
+  const dialog = new Node('div', { role: 'dialog' }, [search]);
+  const multi = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [
+    mailboxRow({ selected: 'true' }), mailboxRow({ selected: 'true', label: 'Read two' }),
+  ]);
+  const folder = new Node('div', { role: 'tree' }, [new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' })]);
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [mailboxRow({ selected: 'true' })]);
+  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [new Node('button')]);
+  assert.equal(actions.resolveContext(documentWith(dialog), eventAt(search)), 'guarded');
+  assert.equal(actions.resolveContext(documentWith(multi), eventAt(multi.children[0])), 'multi-selection');
+  assert.equal(actions.resolveContext(documentWith(folder), eventAt(folder.children[0])), 'folder');
+  assert.equal(actions.resolveContext(documentWith(list), eventAt(list.children[0])), 'message-list');
+  assert.equal(actions.resolveContext(documentWith(reading), eventAt(reading.children[0])), 'reading');
+});
+
+test('resolveContext returns null when focus path and semantic roots disagree or roots are ambiguous', () => {
+  const row = mailboxRow({ selected: 'true' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  const folder = new Node('div', { role: 'tree' }, [new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' })]);
+  const document = documentWith(list, folder);
+  document.activeElement = folder.children[0];
+  assert.equal(actions.resolveContext(document, eventAt(row)), null);
+  assert.equal(actions.resolveContext(documentWith(
+    new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [mailboxRow()]),
+    new Node('div', { role: 'listbox', 'aria-label': 'Sent messages' }, [mailboxRow()]),
+  ), eventAt(null)), null);
+});
+
+test('moveRight and moveLeft choose folder replay, disclosure, or safe row behavior', () => {
+  const calls = [];
+  const vim = actions.createOutlookActions({ replayShortcut: (id) => { calls.push(id); return true; } });
+  const tree = new Node('div', { role: 'tree' }, [new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' })]);
+  assert.equal(vim.moveRight(documentWith(tree), eventAt(tree.children[0])), true);
+  assert.equal(vim.moveLeft(documentWith(tree), eventAt(tree.children[0])), true);
+  const disclosure = new Node('button', { 'aria-expanded': 'false' });
+  const row = mailboxRow({ selected: 'true' });
+  row.children.push(disclosure); disclosure.parentElement = row;
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  assert.equal(vim.moveRight(documentWith(list), eventAt(row)), true);
+  assert.equal(disclosure.clickCount, 1);
+  assert.equal(vim.moveLeft(documentWith(list), eventAt(row)), false);
+  assert.deepEqual(calls, ['folderExpand', 'folderCollapse']);
+});
+
+test('readContext, escapeContext, and context boundaries use the resolved context', () => {
+  const calls = [];
+  const vim = actions.createOutlookActions({ replayShortcut: (id) => { calls.push(id); return true; } });
+  const unread = mailboxRow({ selected: 'true', read: 'unread' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [unread]);
+  assert.equal(vim.readContext(documentWith(list), eventAt(unread)), true);
+  assert.equal(vim.startContext(documentWith(list), eventAt(unread)), true);
+  assert.equal(vim.endContext(documentWith(list), eventAt(unread)), true);
+  assert.deepEqual(calls, ['markRead', 'firstList']);
+  assert.equal(unread.clickCount, 1);
+  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
+    new Node('button', { 'aria-label': 'Mark as unread' }),
+  ]);
+  assert.equal(vim.readContext(documentWith(reading), eventAt(reading.children[0])), true);
+  assert.equal(vim.startContext(documentWith(reading), eventAt(reading.children[0])), true);
+  assert.equal(vim.endContext(documentWith(reading), eventAt(reading.children[0])), true);
+  assert.deepEqual(calls.slice(-2), ['topMessage', 'bottomMessage']);
+});
+
+test('selection actions click only matching unchecked row checkboxes and preserve selection', () => {
+  const rows = [mailboxRow({ read: 'read' }), mailboxRow({ read: 'unread', label: 'Unread' }), mailboxRow({ read: 'unknown', label: 'Unknown' })];
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, rows);
+  assert.equal(actions.selectRead(documentWith(list)), true);
+  assert.equal(rows[0].children[0].clickCount, 1);
+  assert.equal(rows[1].children[0].clickCount, 0);
+  assert.equal(rows[2].children[0].clickCount, 0);
+  assert.equal(actions.selectUnread(documentWith(list)), true);
+  assert.equal(rows[1].children[0].clickCount, 1);
+});
+
+test('folder destinations and label use exact visible controls', () => {
+  const labels = ['Inbox', 'Flagged', 'Snoozed', 'Sent Items', 'Drafts', 'All Mail', 'Tasks'];
+  const tree = new Node('div', { role: 'tree' }, labels.map(label => new Node('div', { role: 'treeitem', 'aria-label': label })));
+  const label = new Node('button', { 'aria-label': 'Categories/Label' });
+  const toolbar = new Node('div', { role: 'toolbar' }, [label]);
+  const document = documentWith(tree, toolbar);
+  for (const action of ['inbox', 'flagged', 'snoozed', 'sent', 'drafts', 'allMail', 'tasks']) assert.equal(actions[action](document), true);
+  assert.equal(actions.label(document), true);
+  assert.equal(label.clickCount, 1);
+});
+
+test('conversation navigation prefers exact controls and uses unique ordered message fallback', () => {
+  const previous = new Node('button', { 'aria-label': 'Previous message' });
+  const next = new Node('button', { 'aria-label': 'Next message' });
+  const conversation = new Node('div', { role: 'region', 'aria-label': 'Conversation view' }, [previous, next]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.previousConversationMessage(documentWith(conversation), eventAt(previous)), true);
+  assert.equal(vim.nextConversationMessage(documentWith(conversation), eventAt(next)), true);
+  assert.equal(previous.clickCount, 1);
+  assert.equal(next.clickCount, 1);
+  assert.equal(vim.nextPage(documentWith(conversation), eventAt(conversation)), true);
+  assert.equal(vim.previousPage(documentWith(conversation), eventAt(conversation)), true);
+});
+
+test('retains standalone message and conversation region labels only when active reading path agrees', () => {
+  for (const label of ['Message', 'Conversation']) {
+    const control = new Node('button', { 'aria-label': 'Mark as unread' });
+    const region = new Node('div', { role: 'region', 'aria-label': label }, [control]);
+    const document = documentWith(region);
+    assert.equal(actions.resolveContext(document, eventAt(control)), 'reading');
+    assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
+      .readContext(document, eventAt(control)), true);
+  }
+});
+
+test('absent and ambiguous diagnostics expose only stable action id and status', () => {
+  const entries = [];
+  const previousLogger = actions._test.setLogger({ debug: (...args) => entries.push(args) });
+  try {
+    actions.archive(documentWith());
+    actions.archive(documentWith(
+      new Node('div', { role: 'toolbar' }, [new Node('button', { 'aria-label': 'Archive' })]),
+      new Node('div', { role: 'main' }, [new Node('button', { 'aria-label': 'Archive' })]),
+    ));
+    assert.deepEqual(entries, [['archive', 'absent'], ['archive', 'ambiguous']]);
+  } finally {
+    actions._test.setLogger(previousLogger);
   }
 });

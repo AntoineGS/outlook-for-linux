@@ -27,6 +27,12 @@ const ACTION_LABELS = {
   forwardNewWindow: ['Forward in new window'],
   undo: ['Undo'],
   redo: ['Redo', 'Repeat'],
+  flagged: ['Flagged'],
+  starred: ['Starred', 'Flagged'],
+  snoozed: ['Snoozed'],
+  allMail: ['All Mail'],
+  tasks: ['Tasks'],
+  label: ['Categories/Label', 'Label', 'Categories'],
 };
 const ACTION_CONTROL_SELECTORS = [
   'button',
@@ -94,9 +100,9 @@ function hasContext(node, roles) {
   return false;
 }
 
-function getMessageRows(document) {
+function getMessageRows(document, actionId = 'message-list') {
   if (!document || typeof document.querySelectorAll !== 'function') {
-    logger.debug('Message list is absent');
+    logger.debug(actionId, 'absent');
     return [];
   }
   const candidates = toArray(document.querySelectorAll('[role="listbox"]')).filter((listbox) => {
@@ -110,11 +116,11 @@ function getMessageRows(document) {
     return hasSemanticLabel || hasMessageRowSemantics;
   });
   if (candidates.length === 0) {
-    logger.debug('Message list is absent');
+    logger.debug(actionId, 'absent');
     return [];
   }
   if (candidates.length !== 1) {
-    logger.debug('Message list is ambiguous');
+    logger.debug(actionId, 'ambiguous');
     return [];
   }
   return toArray(candidates[0].querySelectorAll('[role="option"]')).filter((row) => !isHidden(row));
@@ -193,7 +199,7 @@ function activateLabeledControl(document, labels, selectors = MAIL_SCOPE_SELECTO
   return activateLabeledControls(getActionRoots(document, selectors), labels);
 }
 
-function activateLabeledControls(roots, labels) {
+function activateLabeledControls(roots, labels, actionId = 'control') {
   const matchesByControl = new Map();
   for (const root of roots) {
     for (const match of getLabeledMatches(root, labels)) {
@@ -203,13 +209,13 @@ function activateLabeledControls(roots, labels) {
   }
   const matches = [...matchesByControl.values()];
   if (matches.length === 0) {
-    logger.debug('Required Outlook control is absent', labels);
+    logger.debug(actionId, 'absent');
     return null;
   }
   const winningRank = Math.min(...matches.map((match) => match.rank));
   const winners = matches.filter((match) => match.rank === winningRank);
   if (winners.length !== 1) {
-    logger.debug('Required Outlook control is ambiguous', labels);
+    logger.debug(actionId, 'ambiguous');
     return null;
   }
   winners[0].control.click();
@@ -217,11 +223,11 @@ function activateLabeledControls(roots, labels) {
 }
 
 function actionForLabel(name, scope = MAIL_SCOPE_SELECTORS) {
-  return (document) => Boolean(activateLabeledControl(document, ACTION_LABELS[name], scope));
+  return (document) => Boolean(activateLabeledControls(getActionRoots(document, scope), ACTION_LABELS[name], name));
 }
 
 function search(document) {
-  const control = activateLabeledControl(document, ACTION_LABELS.search, SEARCH_SCOPE_SELECTORS);
+  const control = activateLabeledControls(getActionRoots(document, SEARCH_SCOPE_SELECTORS), ACTION_LABELS.search, 'search');
   if (!control) return false;
   const roots = getActionRoots(document, ['[role="search"]']);
 	let textboxes = [...new Set(roots.flatMap((root) => toArray(
@@ -232,13 +238,14 @@ function search(document) {
       .filter((textbox) => typeof textbox.focus === 'function' && isVisible(textbox));
   }
   if (textboxes.length === 1) textboxes[0].focus();
-  else logger.debug('Search textbox is absent or ambiguous');
+  else logger.debug('search', 'absent');
   return true;
 }
 
 function getUniqueCommandToolbar(document) {
   const toolbars = getActionRoots(document, ['[role="toolbar"]']).filter(isVisible);
   const candidates = toolbars.filter((toolbar) => {
+    if (hasGuardedContext(toolbar)) return false;
     const controls = [...new Set(getLabeledMatches(toolbar, ACTION_LABELS.compose)
       .map(({ control }) => control))];
     return controls.length === 1;
@@ -291,8 +298,143 @@ function getScopedActionRoots(document, event) {
   return [...new Set(roots)];
 }
 
+function nodeHasRole(node, roles) {
+  return roles.includes(getAttribute(node, 'role')) || node?.tagName === 'DIALOG';
+}
+
+function containsNode(root, node) {
+  if (!root || !node) return false;
+  for (let current = node; current; current = current.parentElement) if (current === root) return true;
+  return false;
+}
+
+function focusNode(document, event) {
+  return event?.target || document?.activeElement || null;
+}
+
+function hasGuardedContext(node) {
+  for (let current = node; current; current = current.parentElement) {
+    if (nodeHasRole(current, ['dialog', 'search', 'combobox'])
+      || getAttribute(current, 'contenteditable') === 'true'
+      || ['INPUT', 'TEXTAREA'].includes(current.tagName)) return true;
+  }
+  return false;
+}
+
+function uniqueRoots(document, selectors, node, event) {
+  return getActionRoots(document, selectors).filter((root) => isVisible(root)
+    && (!node || containsNode(root, node) || isInPath(root, event, document)));
+}
+
+/**
+ * Resolves the semantic mailbox context without relying on global selection alone.
+ * Guarded editor/search/dialog roots always win over mailbox roots.
+ *
+ * @param {object} document browser document-like object
+ * @param {object} event keyboard event-like object
+ * @returns {'guarded'|'multi-selection'|'folder'|'message-list'|'reading'|null}
+ */
+function resolveContext(document, event) {
+  const node = focusNode(document, event);
+  if (hasGuardedContext(node)) return 'guarded';
+  const active = document?.activeElement;
+  if (event?.target && active && event.target !== active) {
+    const semanticRoots = [
+      ...getActionRoots(document, FOLDER_SCOPE_SELECTORS),
+      ...getActionRoots(document, ['[role="listbox"]']),
+      ...getActionRoots(document, ['[role="region"]']).filter((region) => isReadingRegion(region, event, document)),
+    ];
+    const eventRoot = semanticRoots.find((root) => containsNode(root, event.target));
+    const activeRoot = semanticRoots.find((root) => containsNode(root, active));
+    if (eventRoot && activeRoot && eventRoot !== activeRoot) return null;
+  }
+  const folders = uniqueRoots(document, FOLDER_SCOPE_SELECTORS, node, event);
+  const lists = uniqueRoots(document, ['[role="listbox"]'], node, event)
+    .filter((list) => toArray(list.querySelectorAll?.('[role="option"]')).some((row) =>
+      /\b(?:unread|read)(?:\s+(?:collapsed|expanded))?\b/.test(normalizeLabel(getAttribute(row, 'aria-label')))
+      || /\b(?:message|mail|inbox|sent|draft)\b/.test(normalizeLabel(getAttribute(list, 'aria-label')))));
+  const readings = uniqueRoots(document, ['[role="region"]'], node, event)
+    .filter((region) => isReadingRegion(region, event, document));
+  const candidates = [folders, lists, readings].filter((roots) => roots.length > 0);
+  if (candidates.length > 1 || candidates.some((roots) => roots.length > 1)) return null;
+  if (lists.length === 1) {
+    const rows = toArray(lists[0].querySelectorAll?.('[role="option"]'));
+    const selected = rows.filter((row) => getAttribute(row, 'aria-selected') === 'true');
+    if (selected.length > 1) return 'multi-selection';
+    return 'message-list';
+  }
+  if (folders.length === 1) return 'folder';
+  if (readings.length === 1) return 'reading';
+  return null;
+}
+
+function replayFor(replayShortcut, id, document, event, legacy) {
+  if (event === undefined) return legacy(document);
+  return replayShortcut(id, event);
+}
+
+function selectedState(row) {
+  const label = normalizeLabel(getAttribute(row, 'aria-label'));
+  const explicit = getAttribute(row, 'data-read-state');
+  const read = explicit || (label.includes('unread') ? 'unread' : label.includes('read') ? 'read' : null);
+  const flagged = getAttribute(row, 'aria-pressed') === 'true'
+    || /\bflagged?\b/.test(label) && !/unflag/.test(label);
+  return { read: read === 'read' ? true : read === 'unread' ? false : null, flagged };
+}
+
+function rowCheckbox(row) {
+  const controls = toArray(row?.querySelectorAll?.('input[type="checkbox"], [role="checkbox"]'))
+    .filter((control) => isVisible(control) && getAttribute(control, 'aria-disabled') !== 'true');
+  return controls.length === 1 ? controls[0] : null;
+}
+
+function selectMatchingRows(document, predicate) {
+  const rows = getMessageRows(document, 'selection');
+  let changed = false;
+  for (const row of rows) {
+    const state = selectedState(row);
+    if (!predicate(row, state)) continue;
+    const checkbox = rowCheckbox(row);
+    if (!checkbox || getAttribute(checkbox, 'aria-checked') === 'true' || checkbox.checked === true) continue;
+    checkbox.click();
+    changed = true;
+  }
+  return changed;
+}
+
+function clearMultiSelection(document) {
+  const rows = getMessageRows(document, 'escape');
+  let changed = false;
+  for (const row of rows) {
+    if (getAttribute(row, 'aria-selected') !== 'true') continue;
+    const checkbox = rowCheckbox(row);
+    if (checkbox && getAttribute(checkbox, 'aria-checked') !== 'true' && checkbox.checked !== true) continue;
+    checkbox?.click();
+    changed = Boolean(checkbox) || changed;
+  }
+  return changed;
+}
+
+function contextControl(document, labels, event) {
+  const reading = getActionRoots(document, ['[role="region"]'])
+    .filter((region) => isVisible(region) && isReadingRegion(region, event, document));
+  return activateLabeledControls(reading, labels);
+}
+
+function adjacentConversationMessage(document, event, direction) {
+  const roots = getActionRoots(document, ['[role="region"]'])
+    .filter((region) => isVisible(region) && isReadingRegion(region, event, document));
+  if (roots.length !== 1) return false;
+  const messages = toArray(roots[0].querySelectorAll?.('[data-message-id], [role="article"]'))
+    .filter(isVisible);
+  const active = document?.activeElement;
+  const current = messages.findIndex((message) => message === active || containsNode(message, active));
+  const target = messages[current + direction];
+  return current >= 0 && Boolean(target) ? selectRow(target) : false;
+}
+
 function scopedActionForLabel(name) {
-  return (document, event) => Boolean(activateLabeledControls(getScopedActionRoots(document, event), ACTION_LABELS[name]));
+  return (document, event) => Boolean(activateLabeledControls(getScopedActionRoots(document, event), ACTION_LABELS[name], name));
 }
 
 /**
@@ -309,6 +451,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
   };
 
   const actions = {
+    resolveContext,
     nextMessage: (document) => moveMessage(document, 1),
     previousMessage: (document) => moveMessage(document, -1),
     firstMessage: (document) => selectRow(getMessageRows(document)[0]),
@@ -330,8 +473,14 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     toggleRead: actionForLabel('toggleRead'),
     toggleFlag: native('flag', actionForLabel('toggleFlag')),
     inbox: actionForLabel('inbox', FOLDER_SCOPE_SELECTORS),
+    flagged: actionForLabel('flagged', FOLDER_SCOPE_SELECTORS),
+    starred: actionForLabel('starred', FOLDER_SCOPE_SELECTORS),
+    snoozed: actionForLabel('snoozed', FOLDER_SCOPE_SELECTORS),
     sent: actionForLabel('sent', FOLDER_SCOPE_SELECTORS),
     drafts: actionForLabel('drafts', FOLDER_SCOPE_SELECTORS),
+    allMail: actionForLabel('allMail', FOLDER_SCOPE_SELECTORS),
+    tasks: actionForLabel('tasks', FOLDER_SCOPE_SELECTORS),
+    label: actionForLabel('label'),
     composeMessage: native('compose', actionForLabel('compose')),
     openMessageNewWindow: native('openNewWindow', () => false),
     archiveMessage: native('archive', actionForLabel('archive')),
@@ -340,6 +489,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     pageDown: native('pageDown', () => false),
     shortcutHelp: native('shortcutHelp', () => false),
     composeNewTab: scopedActionForLabel('composeNewTab'),
+    composeMessageNewTab: scopedActionForLabel('composeNewTab'),
     replyNewWindow: scopedActionForLabel('replyNewWindow'),
     replyAllNewWindow: scopedActionForLabel('replyAllNewWindow'),
     forwardNewWindow: scopedActionForLabel('forwardNewWindow'),
@@ -347,8 +497,80 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     redo: scopedActionForLabel('redo'),
   };
 
+  actions.moveRight = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'guarded' || context === null) return false;
+    if (context === 'folder') return replayFor(replayShortcut, 'folderExpand', document, event, () => false);
+    if (context === 'message-list') {
+      const disclosure = getDisclosure(document);
+      if (disclosure && getAttribute(disclosure, 'aria-expanded') === 'false') return setConversationState(document, true);
+      return selectRow(getSelectedRow(document, getMessageRows(document)));
+    }
+    return false;
+  };
+  actions.moveLeft = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'folder') return replayFor(replayShortcut, 'folderCollapse', document, event, () => false);
+    if (context !== 'message-list') return false;
+    const disclosure = getDisclosure(document);
+    if (disclosure && getAttribute(disclosure, 'aria-expanded') === 'true') return setConversationState(document, false);
+    return false;
+  };
+  actions.readContext = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'message-list') {
+      const row = getSelectedRow(document, getMessageRows(document));
+      const state = selectedState(row);
+      if (state.read === null) return false;
+      return replayFor(replayShortcut, state.read ? 'markUnread' : 'markRead', document, event, () => false);
+    }
+    if (context === 'reading') return Boolean(contextControl(document, ['Mark as unread'], event));
+    return false;
+  };
+  actions.escapeContext = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'guarded') return 'pass-through';
+    if (context === 'multi-selection') return clearMultiSelection(document);
+    return Boolean(activateLabeledControl(document, ACTION_LABELS.back));
+  };
+  actions.startContext = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'message-list') return replayFor(replayShortcut, 'firstList', document, event, () => selectRow(getMessageRows(document)[0]));
+    if (context === 'reading') return replayFor(replayShortcut, 'topMessage', document, event, () => false);
+    return false;
+  };
+  actions.endContext = (document, event) => {
+    const context = resolveContext(document, event);
+    if (context === 'message-list') {
+      const rows = getMessageRows(document);
+      return selectRow(rows[rows.length - 1]);
+    }
+    if (context === 'reading') return replayFor(replayShortcut, 'bottomMessage', document, event, () => false);
+    return false;
+  };
+  actions.selectAll = (document) => selectMatchingRows(document, () => true);
+  actions.selectRead = (document) => selectMatchingRows(document, (_row, state) => state.read === true);
+  actions.selectUnread = (document) => selectMatchingRows(document, (_row, state) => state.read === false);
+  actions.selectStarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === true);
+  actions.selectUnstarred = (document) => selectMatchingRows(document, (_row, state) => state.flagged === false);
+  actions.previousConversationMessage = (document, event) => {
+    if (resolveContext(document, event) !== 'reading') return false;
+    return Boolean(activateLabeledControl(document, ['Previous message', 'Previous'], ['[role="region"]']))
+      || adjacentConversationMessage(document, event, -1);
+  };
+  actions.nextConversationMessage = (document, event) => {
+    if (resolveContext(document, event) !== 'reading') return false;
+    return Boolean(activateLabeledControl(document, ['Next message', 'Next'], ['[role="region"]']))
+      || adjacentConversationMessage(document, event, 1);
+  };
+  actions.nextPage = (document, event) => replayFor(replayShortcut, 'pageDown', document, event, () => false);
+  actions.previousPage = (document, event) => replayFor(replayShortcut, 'pageUp', document, event, () => false);
+  actions.undoContext = actions.undo;
+  actions.redoContext = actions.redo;
+
   actions._test = {
     findLabeledControl,
+    resolveContext,
     setLogger(nextLogger) {
       const previous = logger;
       logger = nextLogger;
