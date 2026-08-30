@@ -324,6 +324,26 @@ test('routes every key through editing before mailbox actions', () => {
 	assert.equal(editing.calls.every(call => call.document === document), true);
 });
 
+test('leaves composer Escape native after editing passes it through', () => {
+	const calls = [];
+	const document = createDocument();
+	const editing = createEditing(['pass-through']);
+	const bindings = createVimBindings({ actions: createActions(calls), document, editing });
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
+	const composer = {
+		getAttribute: name => name === 'contenteditable' ? 'true' :
+			name === 'role' ? 'textbox' : null
+	};
+	const escape = createEvent('Escape', { composedPath: () => [composer] });
+
+	keydown(escape);
+
+	assert.deepEqual(calls, []);
+	assert.equal(escape.preventDefaultCalled, false);
+	assert.equal(escape.stopPropagationCalled, false);
+});
+
 test('does not route search and dialog fields to mailbox actions after editing pass-through', () => {
 	const calls = [];
 	const document = createDocument();

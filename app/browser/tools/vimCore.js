@@ -241,8 +241,9 @@ function createVimDriver(adapter, corePromise = loadVimCore()) {
 		const handleNormal = event => {
 			const key = event.key;
 			if (key === 'Escape' && !isModifiedShortcut(event) && !event.shiftKey) {
+				const hadPendingSequence = sequence.length > 0;
 				reset();
-				return 'handled';
+				return hadPendingSequence ? 'handled' : 'pass-through';
 			}
 			const exactCtrlR = key === 'r' && event.ctrlKey &&
 				!event.altKey && !event.metaKey && !event.shiftKey;

@@ -251,16 +251,30 @@ test('routes a complete normal command and reports handled', async () => {
 	assert.equal(event.stopped, true);
 });
 
-test('consumes Escape as a no-op in Normal mode', async () => {
+test('passes idle Escape through in Normal mode', async () => {
 	const adapter = createAdapter();
 	const driver = await createVimDriver(adapter, createCore());
 	const event = createEvent('Escape');
 
-	assert.equal(driver.handleKey(event), 'handled');
-	assert.equal(event.prevented, true);
-	assert.equal(event.stopped, true);
+	assert.equal(driver.handleKey(event), 'pass-through');
+	assert.equal(Boolean(event.prevented), false);
+	assert.equal(Boolean(event.stopped), false);
 	assert.equal(driver.mode(), 'normal');
 	assert.deepEqual(adapter.calls, []);
+});
+
+test('consumes Escape to cancel a pending Normal-mode sequence', async () => {
+	const adapter = createAdapter();
+	const driver = await createVimDriver(adapter, createCore());
+	const prefix = createEvent('g');
+	const escape = createEvent('Escape');
+
+	assert.equal(driver.handleKey(prefix), 'handled');
+	assert.equal(driver.handleKey(escape), 'handled');
+	assert.equal(escape.prevented, true);
+	assert.equal(escape.stopped, true);
+	assert.equal(driver.handleKey(createEvent('h')), 'handled');
+	assert.deepEqual(adapter.calls, ['preflight', 'begin', 'find:h', 'commit']);
 });
 
 test('reports a valid prefix as handled without invoking Vim core', async () => {

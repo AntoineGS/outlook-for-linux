@@ -93,7 +93,20 @@ function runPasswordCommand(command) {
 // each script string). Kept in one place so the two scripts don't duplicate
 // them. Runs in the login page's own context.
 const RENDERER_PRELUDE = `
-    const editable = (el) => (el.offsetParent !== null || el.getClientRects().length) && !el.disabled && !el.readOnly;
+    const attribute = (el, name) => typeof el.getAttribute === 'function' ? el.getAttribute(name) : null;
+    const hidden = (el) => {
+      for (let current = el; current; current = current.parentElement) {
+        if (current.hidden || current.inert || current.disabled ||
+            attribute(current, 'hidden') !== null || attribute(current, 'aria-hidden') === 'true' ||
+            attribute(current, 'inert') !== null || attribute(current, 'disabled') !== null ||
+            attribute(current, 'aria-disabled') === 'true') return true;
+        const style = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(current) : null;
+        if (style && (style.display === 'none' || style.visibility === 'hidden' ||
+            style.visibility === 'collapse' || style.opacity === '0')) return true;
+      }
+      return el.offsetParent === null && el.getClientRects().length === 0;
+    };
+    const editable = (el) => !hidden(el) && !el.disabled && !el.readOnly;
     const setValue = (el, v) => {
       try { el.focus(); } catch (e) { void e; }
       const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
