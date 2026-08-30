@@ -46,8 +46,10 @@ function createReplayClient({ send, setTimeout: setTimeoutFn = setTimeout,
 	clearTimeout: clearTimeoutFn = clearTimeout }) {
 	let expected = null;
 	let timeout = null;
+	let generation = 0;
 
-	function clearExpected() {
+	function clearExpected(owner) {
+		if (owner !== undefined && expected?.generation !== owner) return;
 		expected = null;
 		if (timeout !== null) clearTimeoutFn(timeout);
 		timeout = null;
@@ -58,13 +60,14 @@ function createReplayClient({ send, setTimeout: setTimeoutFn = setTimeout,
 		const shortcut = OUTLOOK_SHORTCUTS[id];
 		if (matchesShortcut(event, shortcut)) return 'pass-through';
 
+		const requestGeneration = ++generation;
 		clearExpected();
-		expected = shortcut;
-		timeout = setTimeoutFn(clearExpected, REPLAY_TIMEOUT_MS);
+		expected = { shortcut, generation: requestGeneration };
+		timeout = setTimeoutFn(() => clearExpected(requestGeneration), REPLAY_TIMEOUT_MS);
 		try {
 			Promise.resolve(send(id)).then(result => {
-				if (result !== true) clearExpected();
-			}, clearExpected);
+				if (result !== true) clearExpected(requestGeneration);
+			}, () => clearExpected(requestGeneration));
 		} catch {
 			clearExpected();
 		}
@@ -72,12 +75,13 @@ function createReplayClient({ send, setTimeout: setTimeoutFn = setTimeout,
 	}
 
 	function shouldBypass(event) {
-		if (!expected || !matchesShortcut(event, expected)) return false;
+		if (!expected || !matchesShortcut(event, expected.shortcut)) return false;
 		clearExpected();
 		return true;
 	}
 
 	function destroy() {
+		generation++;
 		clearExpected();
 	}
 

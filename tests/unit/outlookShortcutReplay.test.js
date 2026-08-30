@@ -127,6 +127,49 @@ test('cleans up the bypass when IPC resolves false', async () => {
 	assert.equal(client.shouldBypass(event('N')), false);
 });
 
+test('ignores a stale false response after a newer replay request', async () => {
+	const resolves = [];
+	const client = createReplayClient({
+		send: () => new Promise(resolve => resolves.push(resolve)),
+	});
+
+	client.request('compose', event('x'));
+	client.request('archive', event('y'));
+	resolves[0](false);
+	await new Promise(resolve => setImmediate(resolve));
+
+	assert.equal(client.shouldBypass(event('E')), true);
+});
+
+test('ignores a stale rejection after a newer replay request', async () => {
+	const rejects = [];
+	const client = createReplayClient({
+		send: () => new Promise((resolve, reject) => rejects.push(reject)),
+	});
+
+	client.request('compose', event('x'));
+	client.request('archive', event('y'));
+	rejects[0](new Error('stale rejection'));
+	await new Promise(resolve => setImmediate(resolve));
+
+	assert.equal(client.shouldBypass(event('E')), true);
+});
+
+test('ignores a stale timeout after a newer replay request', () => {
+	const timeouts = [];
+	const client = createReplayClient({
+		send: () => new Promise(() => {}),
+		setTimeout: callback => { timeouts.push(callback); return timeouts.length; },
+		clearTimeout: () => {},
+	});
+
+	client.request('compose', event('x'));
+	client.request('archive', event('y'));
+	timeouts[0]();
+
+	assert.equal(client.shouldBypass(event('E')), true);
+});
+
 test('handler replays only approved IDs to the invoking sender', async () => {
 	const sent = [];
 	const ipcMain = { handle(channel, handler) { this.channel = channel; this.handler = handler; } };
