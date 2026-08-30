@@ -53,6 +53,16 @@ test('rejects unknown IDs without starting IPC', () => {
 	assert.deepEqual(sent, []);
 });
 
+test('rejects non-string and inherited-property IDs without starting IPC', () => {
+	const sent = [];
+	const client = createReplayClient({ send: id => sent.push(id) });
+
+	for (const id of [null, 42, [], {}, 'constructor', 'toString', '__proto__']) {
+		assert.equal(client.request(id, event('N')), false);
+	}
+	assert.deepEqual(sent, []);
+});
+
 test('passes through a physical event that already matches the shortcut', () => {
 	const sent = [];
 	const client = createReplayClient({ send: id => sent.push(id) });
@@ -88,19 +98,29 @@ test('does not bypass a different physical key', () => {
 
 test('expires the bypass after 250 milliseconds', () => {
 	let expire;
+	let timeoutDelay;
 	const client = createReplayClient({
 		send: () => Promise.resolve(true),
-		setTimeout: callback => { expire = callback; return 1; },
+		setTimeout: (callback, delay) => { expire = callback; timeoutDelay = delay; return 1; },
 		clearTimeout: () => {},
 	});
 	client.request('compose', event('x'));
 
+	assert.equal(timeoutDelay, 250);
 	expire();
 	assert.equal(client.shouldBypass(event('N')), false);
 });
 
 test('cleans up the bypass after rejected IPC', async () => {
 	const client = createReplayClient({ send: () => Promise.reject(new Error('rejected')) });
+
+	assert.equal(client.request('compose', event('x')), true);
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(client.shouldBypass(event('N')), false);
+});
+
+test('cleans up the bypass when IPC resolves false', async () => {
+	const client = createReplayClient({ send: () => Promise.resolve(false) });
 
 	assert.equal(client.request('compose', event('x')), true);
 	await new Promise(resolve => setImmediate(resolve));
@@ -124,6 +144,9 @@ test('handler replays only approved IDs to the invoking sender', async () => {
 		{ type: 'keyUp', keyCode: 'N', modifiers: [] },
 	]);
 	assert.equal(await ipcMain.handler({ sender }, 'unknown'), false);
+	for (const shortcutId of [null, 42, [], {}, 'constructor', 'toString', '__proto__']) {
+		assert.equal(await ipcMain.handler({ sender }, shortcutId), false);
+	}
 });
 
 test('rejects unapproved senders and disabled Vim configuration', async () => {

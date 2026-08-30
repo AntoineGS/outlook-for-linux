@@ -54,15 +54,17 @@ function createReplayClient({ send, setTimeout: setTimeoutFn = setTimeout,
 	}
 
 	function request(id, event) {
+		if (typeof id !== 'string' || !Object.hasOwn(OUTLOOK_SHORTCUTS, id)) return false;
 		const shortcut = OUTLOOK_SHORTCUTS[id];
-		if (!shortcut) return false;
 		if (matchesShortcut(event, shortcut)) return 'pass-through';
 
 		clearExpected();
 		expected = shortcut;
 		timeout = setTimeoutFn(clearExpected, REPLAY_TIMEOUT_MS);
 		try {
-			Promise.resolve(send(id)).catch(clearExpected);
+			Promise.resolve(send(id)).then(result => {
+				if (result !== true) clearExpected();
+			}, clearExpected);
 		} catch {
 			clearExpected();
 		}
@@ -98,7 +100,8 @@ function isApprovedSender(event, product) {
 function registerOutlookShortcutReplay({ ipcMain, config, product }) {
 	const handler = async (event, shortcutId) => {
 		if (config?.shortcuts?.vim?.enabled !== true ||
-			!OUTLOOK_SHORTCUTS[shortcutId] || !isApprovedSender(event, product)) return false;
+			typeof shortcutId !== 'string' || !Object.hasOwn(OUTLOOK_SHORTCUTS, shortcutId) ||
+			!isApprovedSender(event, product)) return false;
 		const shortcut = OUTLOOK_SHORTCUTS[shortcutId];
 		const sender = event.sender;
 		if (typeof sender.sendInputEvent !== 'function') return false;
