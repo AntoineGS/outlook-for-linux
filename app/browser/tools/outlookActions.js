@@ -100,21 +100,27 @@ function hasContext(node, roles) {
   return false;
 }
 
+function isEligibleMessageList(listbox) {
+  if (isHidden(listbox) || hasContext(listbox, ['search', 'combobox', 'dialog'])) return false;
+  const rows = toArray(listbox.querySelectorAll?.('[role="option"]'));
+  if (rows.length === 0) return false;
+  const label = normalizeLabel(getAttribute(listbox, 'aria-label'));
+  const hasSemanticLabel = /\b(message|mail|inbox|sent|draft)\b/.test(label);
+  const hasMessageRowSemantics = rows.some((row) =>
+    /\b(?:unread|read)(?:\s+(?:collapsed|expanded))?\b/.test(normalizeLabel(getAttribute(row, 'aria-label'))));
+  return hasSemanticLabel || hasMessageRowSemantics;
+}
+
+function getEligibleMessageLists(document) {
+  return getActionRoots(document, ['[role="listbox"]']).filter(isEligibleMessageList);
+}
+
 function getMessageRows(document, actionId = 'message-list') {
   if (!document || typeof document.querySelectorAll !== 'function') {
     logger.debug(actionId, 'absent');
     return [];
   }
-  const candidates = toArray(document.querySelectorAll('[role="listbox"]')).filter((listbox) => {
-    if (isHidden(listbox) || hasContext(listbox, ['search', 'combobox', 'dialog'])) return false;
-    const rows = toArray(listbox.querySelectorAll?.('[role="option"]'));
-    if (rows.length === 0) return false;
-    const label = normalizeLabel(getAttribute(listbox, 'aria-label'));
-    const hasSemanticLabel = /\b(message|mail|inbox|sent|draft)\b/.test(label);
-    const hasMessageRowSemantics = rows.some((row) =>
-      /\b(?:unread|read)(?:\s+(?:collapsed|expanded))?\b/.test(normalizeLabel(getAttribute(row, 'aria-label'))));
-    return hasSemanticLabel || hasMessageRowSemantics;
-  });
+  const candidates = getEligibleMessageLists(document);
   if (candidates.length === 0) {
     logger.debug(actionId, 'absent');
     return [];
@@ -347,12 +353,7 @@ function resolveContext(document, event) {
   const node = focusNode(document, event);
   const path = event?.composedPath?.() || [];
   if (hasGuardedContext(node) || path.some(hasGuardedContext)) return 'guarded';
-  const globalLists = getActionRoots(document, ['[role="listbox"]']).filter((list) => {
-    if (isHidden(list) || hasContext(list, ['search', 'combobox', 'dialog'])) return false;
-    const rows = toArray(list.querySelectorAll?.('[role="option"]'));
-    return rows.length > 0 && (/\b(?:message|mail|inbox|sent|draft)\b/.test(normalizeLabel(getAttribute(list, 'aria-label')))
-      || rows.some((row) => /\b(?:unread|read)\b/.test(normalizeLabel(getAttribute(row, 'aria-label')))));
-  });
+  const globalLists = getEligibleMessageLists(document);
   const globalSelected = globalLists.flatMap((list) => toArray(list.querySelectorAll?.('[role="option"]')))
     .filter((row) => getAttribute(row, 'aria-selected') === 'true'
       || toArray(row.querySelectorAll?.('input[type="checkbox"], [role="checkbox"]'))
@@ -436,8 +437,9 @@ function selectMatchingRows(document, predicate, actionId) {
 }
 
 function clearMultiSelection(document) {
-  const rows = getActionRoots(document, ['[role="listbox"]']).flatMap((list) =>
+  const rows = [...new Set(getEligibleMessageLists(document).flatMap((list) =>
     toArray(list.querySelectorAll?.('[role="option"]')))
+  )]
     .filter((row) => getAttribute(row, 'aria-selected') === 'true'
       || rowCheckbox(row).control && (getAttribute(rowCheckbox(row).control, 'aria-checked') === 'true'
         || rowCheckbox(row).control.checked === true));

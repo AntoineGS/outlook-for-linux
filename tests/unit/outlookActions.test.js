@@ -1063,3 +1063,44 @@ test('destination aliases reject absent and ambiguous tree items', () => {
   assert.equal(actions.starred(documentWith(new Node('div', { role: 'tree' }, [first, second]))), false);
   assert.equal(first.clickCount + second.clickCount, 0);
 });
+
+test('disabled and aria-disabled checkboxes are untouched and diagnosed independently', () => {
+  for (const attribute of ['disabled', 'aria-disabled']) {
+    const row = mailboxRow({ read: 'read' });
+    row.children[0].attributes[attribute] = attribute === 'aria-disabled' ? 'true' : '';
+    const entries = [];
+    const previousLogger = actions._test.setLogger({ debug: (...args) => entries.push(args) });
+    try {
+      assert.equal(actions.selectRead(documentWith(new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]))), false);
+      assert.equal(row.children[0].clickCount, 0);
+      assert.deepEqual(entries, [['selectRead', 'absent']]);
+    } finally {
+      actions._test.setLogger(previousLogger);
+    }
+  }
+});
+
+test('already checked matching rows are skipped without toggling or diagnostics', () => {
+  const row = mailboxRow({ read: 'read', selected: 'true' });
+  assert.equal(actions.selectRead(documentWith(
+    new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]),
+  )), false);
+  assert.equal(row.children[0].clickCount, 0);
+});
+
+test('escape clears mailbox multi-selection but never checks unrelated picker or dialog lists', () => {
+  const mailboxFirst = mailboxRow({ read: 'read', selected: 'true' });
+  const mailboxSecond = mailboxRow({ read: 'unread', selected: 'true' });
+  const mailbox = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [mailboxFirst, mailboxSecond]);
+  const pickerCheckbox = new Node('input', { type: 'checkbox', 'aria-checked': 'true' });
+  pickerCheckbox.checked = true;
+  const picker = new Node('div', { role: 'listbox', 'aria-label': 'People picker' }, [
+    new Node('div', { role: 'option' }, [pickerCheckbox]),
+  ]);
+  const dialog = new Node('div', { role: 'dialog' }, [picker]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  assert.equal(vim.escapeContext(documentWith(mailbox, dialog), eventAt(mailboxFirst)), true);
+  assert.equal(mailboxFirst.children[0].clickCount, 1);
+  assert.equal(mailboxSecond.children[0].clickCount, 1);
+  assert.equal(pickerCheckbox.clickCount, 0);
+});
