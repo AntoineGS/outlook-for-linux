@@ -2,6 +2,11 @@ const DISCLOSURE_SELECTORS = [
   'button[aria-expanded]',
   '[role="button"][aria-expanded]',
 ];
+const NATIVE_SHORTCUTS = {
+  archive: { keyCode: 'e', modifiers: [] },
+  reply: { keyCode: 'r', modifiers: [] },
+  shortcutHelp: { keyCode: '/', modifiers: ['shift'] },
+};
 const ACTION_LABELS = {
   back: ['Back', 'Close'],
   search: ['Search', 'Search for email, meetings, files and more.'],
@@ -241,19 +246,51 @@ function getUniqueCommandToolbar(document) {
   return candidates.length === 1 ? candidates[0] : null;
 }
 
-function getScopedActionRoots(document) {
+function eventModifiers(event) {
+  if (Array.isArray(event?.modifiers)) return event.modifiers.map(String).map((modifier) => modifier.toLowerCase()).sort();
+  return [event?.shiftKey && 'shift', event?.ctrlKey && 'control', event?.altKey && 'alt', event?.metaKey && 'cmd']
+    .filter(Boolean);
+}
+
+function matchesNativeShortcut(id, event) {
+  const shortcut = NATIVE_SHORTCUTS[id];
+  if (!shortcut) return false;
+  const key = String(event?.keyCode || event?.key || '').toLowerCase();
+  const expectedKey = shortcut.keyCode === '/' && key === '?' ? '/' : key;
+  return expectedKey === shortcut.keyCode
+    && eventModifiers(event).length === shortcut.modifiers.length
+    && eventModifiers(event).every((modifier, index) => modifier === shortcut.modifiers[index]);
+}
+
+function isInPath(node, event, document) {
+  const path = event?.composedPath?.();
+  if (Array.isArray(path) && path.includes(node)) return true;
+  for (let current = event?.target || document?.activeElement; current; current = current.parentElement) {
+    if (current === node) return true;
+  }
+  return false;
+}
+
+function isReadingRegion(region, event, document) {
+  const label = normalizeLabel(getAttribute(region, 'aria-label'));
+  return /\b(?:message|mail|reading|conversation|content)\b/.test(label)
+    && isInPath(region, event, document);
+}
+
+function getScopedActionRoots(document, event) {
   const roots = [];
   const rows = getMessageRows(document);
   const selected = getSelectedRow(document, rows);
   if (selected) roots.push(selected);
-  roots.push(...getActionRoots(document, ['[role="region"]']).filter(isVisible));
+  roots.push(...getActionRoots(document, ['[role="region"]'])
+    .filter((region) => isVisible(region) && isReadingRegion(region, event, document)));
   const commandToolbar = getUniqueCommandToolbar(document);
   if (commandToolbar) roots.push(commandToolbar);
   return [...new Set(roots)];
 }
 
 function scopedActionForLabel(name) {
-  return (document) => Boolean(activateLabeledControls(getScopedActionRoots(document), ACTION_LABELS[name]));
+  return (document, event) => Boolean(activateLabeledControls(getScopedActionRoots(document, event), ACTION_LABELS[name]));
 }
 
 /**
@@ -264,7 +301,9 @@ function scopedActionForLabel(name) {
  */
 function createOutlookActions({ replayShortcut = () => false } = {}) {
   const native = (id, legacy) => function nativeAction(document, event) {
-    return event === undefined ? legacy(document) : replayShortcut(id, event);
+    if (event === undefined) return legacy(document);
+    if (matchesNativeShortcut(id, event)) return 'pass-through';
+    return replayShortcut(id, event);
   };
 
   const actions = {

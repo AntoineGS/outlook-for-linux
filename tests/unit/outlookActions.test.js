@@ -618,22 +618,26 @@ const ROUTES = [
   ['shortcutHelp', 'shortcutHelp'],
 ];
 
-const eventFor = (key) => ({ key, keyCode: key });
+const eventFor = (key) => key === '?' ? {
+  key,
+  keyCode: '/',
+  shiftKey: true,
+} : { key, keyCode: key.toUpperCase() };
 
 test('factory native routes delegate exactly once and preserve physical pass-through', () => {
   const calls = [];
   const nativeActions = actions.createOutlookActions({
     replayShortcut(id, event) {
       calls.push([id, event]);
-      return id === 'archive' || id === 'reply' || id === 'shortcutHelp' ? 'pass-through' : true;
+      return true;
     },
   });
   const document = documentWith();
 
-  for (const [name, id] of ROUTES) {
-    const event = eventFor(name === 'archiveMessage' ? 'e' : name === 'reply' ? 'r' : name === 'shortcutHelp' ? '?' : name);
+  for (const [name] of ROUTES) {
+    const event = eventFor(['archiveMessage', 'reply', 'shortcutHelp'].includes(name) ? 'x' : name);
     const result = nativeActions[name](document, event);
-    assert.equal(result, id === 'archive' || id === 'reply' || id === 'shortcutHelp' ? 'pass-through' : true);
+    assert.equal(result, true);
   }
 
   assert.equal(calls.length, ROUTES.length);
@@ -645,7 +649,7 @@ test('native route methods pass through matching Outlook physical events without
   const nativeActions = actions.createOutlookActions({
     replayShortcut(id, event) {
       calls.push([id, event]);
-      return 'pass-through';
+      return true;
     },
   });
   const document = documentWith();
@@ -653,7 +657,22 @@ test('native route methods pass through matching Outlook physical events without
   assert.equal(nativeActions.archiveMessage(document, eventFor('e')), 'pass-through');
   assert.equal(nativeActions.reply(document, eventFor('r')), 'pass-through');
   assert.equal(nativeActions.shortcutHelp(document, eventFor('?')), 'pass-through');
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 0);
+});
+
+test('native pass-through requires an exact physical modifier set', () => {
+  const calls = [];
+  const nativeActions = actions.createOutlookActions({
+    replayShortcut(id, event) {
+      calls.push([id, event]);
+      return true;
+    },
+  });
+
+  assert.equal(nativeActions.archiveMessage(documentWith(), { key: 'e', ctrlKey: true }), true);
+  assert.equal(nativeActions.reply(documentWith(), { key: 'r', shiftKey: true }), true);
+  assert.equal(nativeActions.shortcutHelp(documentWith(), { key: '?', altKey: true }), true);
+  assert.deepEqual(calls.map(([id]) => id), ['archive', 'reply', 'shortcutHelp']);
 });
 
 test('scoped controls use the uniquely identified command toolbar', () => {
@@ -669,12 +688,42 @@ test('scoped controls use the uniquely identified command toolbar', () => {
   assert.equal(distractor.clickCount, 0);
 });
 
+test('scoped new-window controls use exact labels', () => {
+  const controls = [
+    ['replyNewWindow', 'Reply in new window'],
+    ['replyAllNewWindow', 'Reply all in new window'],
+    ['forwardNewWindow', 'Forward in new window'],
+  ];
+  for (const [action, label] of controls) {
+    const control = new Node('button', { 'aria-label': label });
+    const selected = new Node('div', { role: 'option', 'aria-selected': 'true' }, [control]);
+    const list = new Node('div', { role: 'listbox', 'aria-label': 'Mail' }, [selected]);
+    const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+
+    assert.equal(nativeActions[action](documentWith(list), {}), true);
+    assert.equal(control.clickCount, 1);
+  }
+});
+
+test('scoped controls reject two command toolbars with compose anchors', () => {
+  const firstCompose = new Node('button', { 'aria-label': 'New mail' });
+  const secondCompose = new Node('button', { 'aria-label': 'New message' });
+  const firstTarget = new Node('button', { 'aria-label': 'New mail in new window' });
+  const secondTarget = new Node('button', { 'aria-label': 'New message in new window' });
+  const firstToolbar = new Node('div', { role: 'toolbar' }, [firstCompose, firstTarget]);
+  const secondToolbar = new Node('div', { role: 'toolbar' }, [secondCompose, secondTarget]);
+  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+
+  assert.equal(nativeActions.composeNewTab(documentWith(firstToolbar, secondToolbar), {}), false);
+  assert.equal(firstTarget.clickCount + secondTarget.clickCount, 0);
+});
+
 test('scoped controls search selected message and reading region but reject ambiguity', () => {
   const selected = new Node('div', { role: 'option', 'aria-selected': 'true' }, [
     new Node('button', { 'aria-label': 'Undo' }),
   ]);
   const list = new Node('div', { role: 'listbox', 'aria-label': 'Mail' }, [selected]);
-  const reading = new Node('div', { role: 'region' }, [
+  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
     new Node('button', { 'aria-label': 'Redo' }),
   ]);
   const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
@@ -682,10 +731,21 @@ test('scoped controls search selected message and reading region but reject ambi
 
   assert.equal(nativeActions.undo(document, {}), true);
   assert.equal(selected.children[0].clickCount, 1);
-  assert.equal(nativeActions.redo(document, {}), true);
+  assert.equal(nativeActions.redo(document, { target: reading.children[0] }), true);
   assert.equal(reading.children[0].clickCount, 1);
 
-  const duplicate = new Node('div', { role: 'region' }, [new Node('button', { 'aria-label': 'Undo' })]);
-  assert.equal(nativeActions.undo(documentWith(list, duplicate), {}), false);
+  const duplicate = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
+    new Node('button', { 'aria-label': 'Undo' }),
+  ]);
+  assert.equal(nativeActions.undo(documentWith(list, duplicate), { target: duplicate.children[0] }), false);
   assert.equal(duplicate.children[0].clickCount, 0);
+});
+
+test('scoped controls reject unrelated visible regions', () => {
+  const control = new Node('button', { 'aria-label': 'Undo' });
+  const unrelated = new Node('div', { role: 'region', 'aria-label': 'Calendar' }, [control]);
+  const nativeActions = actions.createOutlookActions({ replayShortcut: () => true });
+
+  assert.equal(nativeActions.undo(documentWith(unrelated), { target: control }), false);
+  assert.equal(control.clickCount, 0);
 });
