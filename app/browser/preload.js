@@ -109,6 +109,12 @@ globalThis.electronAPI = {
   navigateBack: () => ipcRenderer.send("navigate-back"),
   navigateForward: () => ipcRenderer.send("navigate-forward"),
   getNavigationState: () => ipcRenderer.invoke("get-navigation-state"),
+  replayOutlookShortcut: (shortcutId) => {
+    if (typeof shortcutId !== 'string' || shortcutId.length > 40) {
+      return Promise.resolve(false);
+    }
+    return ipcRenderer.invoke('vim-replay-outlook-shortcut', shortcutId);
+  },
   onNavigationStateChanged: (callback) => {
     if (typeof callback !== 'function') {
       console.error('Invalid callback for navigation state changed');

@@ -98,6 +98,14 @@ describe('Outlook runtime boundary', () => {
     assert.doesNotMatch(preloadSource, /vimRichTextSpikeBridge/);
   });
 
+  it('exposes only the fixed-ID Outlook replay API', () => {
+    assert.match(preloadSource, /replayOutlookShortcut:\s*\(shortcutId\)\s*=>/);
+    assert.match(preloadSource, /ipcRenderer\.invoke\(['"]vim-replay-outlook-shortcut['"], shortcutId\)/);
+    assert.match(preloadSource, /typeof shortcutId !== ['"]string['"] \|\| shortcutId\.length > 40/);
+    assert.doesNotMatch(preloadSource, /sendInputEvent/);
+    assert.doesNotMatch(preloadSource, /arbitraryAccelerator|accelerator.*config/i);
+  });
+
   it('keeps get-config internal to preload without exposing a config bridge', () => {
     assert.doesNotMatch(preloadSource, /getConfig:\s*\(\)\s*=>/);
     assert.match(preloadSource, /ipcRenderer\.invoke\(["']get-config["']\)/);

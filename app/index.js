@@ -34,6 +34,7 @@ const WebAuthn = require("./webauthn");
 const os = require("node:os");
 const product = require("./product");
 const { getAuthoritativeSenderUrl } = require("./mainAppWindow/authRecoverySource");
+const { registerOutlookShortcutReplay } = require("./outlookShortcutReplay");
 const isMac = os.platform() === "darwin";
 
 const { NETWORK_ERROR_PATTERNS } = require("./config/defaults");
@@ -290,6 +291,8 @@ if (gotTheLock) {
       canGoForward: webContents?.navigationHistory?.canGoForward() || false,
     };
   });
+
+  registerOutlookShortcutReplay({ ipcMain, config, product });
 
   // Log renderer-side unhandled promise rejections
   ipcMain.on("unhandled-rejection", (event, errorData) => {

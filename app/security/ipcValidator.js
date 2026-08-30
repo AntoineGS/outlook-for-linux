@@ -43,6 +43,7 @@ const allowedChannels = new Set([
   'navigate-forward',
   'get-navigation-state',
   'navigation-state-changed',
+  'vim-replay-outlook-shortcut',
 
   // Renderer-side error forwarding (registered in app/browser/preload.js)
   'unhandled-rejection',

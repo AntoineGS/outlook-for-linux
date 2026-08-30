@@ -169,6 +169,10 @@ describe('IPC Validator - Allowlist completeness', () => {
 });
 
 describe('IPC Validator - Outlook channel boundary', () => {
+	it('accepts the fixed-ID Outlook shortcut replay channel', () => {
+		assert.equal(validateIpcChannel('vim-replay-outlook-shortcut'), true);
+	});
+
 	for (const channel of ['get-outlook-settings', 'set-outlook-settings']) {
 		it(`accepts ${channel}`, () => {
 			assert.equal(validateIpcChannel(channel), true);
