@@ -72,6 +72,13 @@ test('passes through a physical event that already matches the shortcut', () => 
 	assert.deepEqual(sent, []);
 });
 
+test('matches browser-shaped replay events with numeric key codes', () => {
+	const client = createReplayClient({ send: () => Promise.resolve(true) });
+
+	assert.equal(client.request('compose', event('x')), true);
+	assert.equal(client.shouldBypass({ key: 'n', keyCode: 78 }), true);
+});
+
 test('bypasses exactly one matching event after replay', async () => {
 	let resolve;
 	const client = createReplayClient({

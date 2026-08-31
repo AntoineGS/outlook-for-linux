@@ -42,7 +42,7 @@ const AD_LAYOUT_HTML = `<!doctype html>
 
 const MAILBOX_HTML = `<!doctype html><html><body>
   <div role="listbox" aria-label="Messages">
-    <div role="option" aria-label="Read message">Message</div>
+    <div role="option" aria-label="Read message" tabindex="0">Message</div>
   </div>
 </body></html>`;
 
@@ -75,109 +75,129 @@ async function main() {
     webPreferences: { nodeIntegration: false, contextIsolation: false, sandbox: false,
       preload: join(__dirname, 'outlookBrowserRuntimePreload.js') },
   });
+  const replayInputs = [];
+  const sendInputEvent = replayWindow.webContents.sendInputEvent.bind(replayWindow.webContents);
+  replayWindow.webContents.sendInputEvent = input => {
+    replayInputs.push(input);
+    return sendInputEvent(input);
+  };
   try {
-    const replayLoad = replayWindow.loadURL('https://outlook.test/mailbox');
-    await window.loadURL(`data:text/html,${encodeURIComponent(COMPOSER_HTML)}`);
-    assert.equal(await window.webContents.executeJavaScript('typeof process'), 'undefined');
     const source = await readFile(RUNTIME_FILE, 'utf8');
     const injected = source.replace('__OFL_CONFIG__', JSON.stringify(RUNTIME_CONFIG));
-    await window.webContents.executeJavaScript(injected);
-    await window.webContents.executeJavaScript('document.querySelector("#editor").focus()');
+    const runComposerCase = async () => {
+      await window.loadURL(`data:text/html,${encodeURIComponent(COMPOSER_HTML)}`);
+      assert.equal(await window.webContents.executeJavaScript('typeof process'), 'undefined');
+      await window.webContents.executeJavaScript(injected);
+      await window.webContents.executeJavaScript('document.querySelector("#editor").focus()');
 
-    const deadline = Date.now() + 3000;
-    let state;
-    do {
-      await window.webContents.executeJavaScript('document.querySelector("#editor").focus(); document.querySelector("#editor").dispatchEvent(new FocusEvent("focusin", { bubbles: true }))');
-      state = await window.webContents.executeJavaScript(`({
-        initialized: globalThis.__oflOutlookVimInitialized === true,
-        badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
-      })`);
-      if (state.initialized && state.badges.some(value => value.includes('NORMAL'))) break;
+      const deadline = Date.now() + 3000;
+      let state;
+      do {
+        await window.webContents.executeJavaScript('document.querySelector("#editor").focus(); document.querySelector("#editor").dispatchEvent(new FocusEvent("focusin", { bubbles: true }))');
+        state = await window.webContents.executeJavaScript(`({
+          initialized: globalThis.__oflOutlookVimInitialized === true,
+          badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
+        })`);
+        if (state.initialized && state.badges.some(value => value.includes('NORMAL'))) break;
+        await sleep(50);
+      } while (Date.now() < deadline);
+
+      assert.equal(state.initialized, true);
+      assert.equal(state.badges.length, 1);
+      assert.equal(state.badges[0], 'NORMAL');
+      await window.webContents.executeJavaScript(`
+        document.querySelector('#editor').dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'i', bubbles: true })
+        );
+      `);
+      const insertDeadline = Date.now() + 3000;
+      do {
+        state = await window.webContents.executeJavaScript(`({
+          badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
+        })`);
+        if (state.badges.length === 1 && state.badges[0] === 'INSERT') break;
+        await sleep(50);
+      } while (Date.now() < insertDeadline);
+
+      assert.equal(state.badges.length, 1);
+      assert.equal(state.badges[0], 'INSERT');
+      await window.webContents.executeJavaScript(`
+        (() => {
+          document.querySelector('#composer').remove();
+          return new Promise(resolve => setTimeout(resolve, 0));
+        })();
+      `);
+      assert.equal(await window.webContents.executeJavaScript(
+        'document.querySelectorAll("[data-vim-mode-badge]").length',
+      ), 0);
+    };
+
+    const runReplayCase = async () => {
+      await replayWindow.loadURL('https://outlook.test/mailbox');
+      await replayWindow.webContents.executeJavaScript(injected);
+      assert.equal(await replayWindow.webContents.executeJavaScript(
+        'typeof globalThis.electronAPI?.replayOutlookShortcut',
+      ), 'function');
+      assert.equal(await replayWindow.webContents.executeJavaScript(
+        'globalThis.__oflOutlookVimInitialized === true',
+      ), true);
+      await replayWindow.webContents.executeJavaScript(`
+        globalThis.__pageKeydowns = [];
+        document.addEventListener('keydown', event => {
+          globalThis.__pageKeydowns.push({ key: event.key, trusted: event.isTrusted });
+        }, true);
+      `);
+      const sendPhysicalKey = async keyCode => {
+        replayWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+        await sleep(10);
+        replayWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+      };
+
+      replayWindow.webContents.focus();
+      await replayWindow.webContents.executeJavaScript(
+        'document.querySelector(\'[role="option"]\').focus()',
+      );
       await sleep(50);
-    } while (Date.now() < deadline);
+      await sendPhysicalKey('c');
+      await sleep(100);
+      const afterCompose = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
+      const replayInputsAfterCompose = replayInputs.filter(input => input.keyCode === 'N');
+      assert.deepEqual(replayInputsAfterCompose.map(input => input.type), ['keyDown', 'keyUp']);
+      assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
+      assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
+      await sendPhysicalKey('e');
+      await sleep(100);
+      const keydowns = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
+      assert.equal(keydowns.filter(event => event.trusted).length, 3);
+      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
+      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'E').length, 1);
+      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
+      assert.equal(replayInputs.filter(input => input.keyCode === 'N').length, 2);
+      assert.equal(keydowns.length, afterCompose.length + 1);
+    };
 
-    assert.equal(state.initialized, true);
-    assert.equal(state.badges.length, 1);
-    assert.equal(state.badges[0], 'NORMAL');
-
-    await window.webContents.executeJavaScript(`
-      document.querySelector('#editor').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'i', bubbles: true })
-      );
-    `);
-    const insertDeadline = Date.now() + 3000;
-    do {
-      state = await window.webContents.executeJavaScript(`({
-        badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
+    const runAdCase = async () => {
+      await adWindow.loadURL(`data:text/html,${encodeURIComponent(AD_LAYOUT_HTML)}`);
+      const initialAdLayout = await adWindow.webContents.executeJavaScript(`({
+        slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
+        contentHeight: document.querySelector('#content').getBoundingClientRect().height,
       })`);
-      if (state.badges.length === 1 && state.badges[0] === 'INSERT') break;
-      await sleep(50);
-    } while (Date.now() < insertDeadline);
+      assert.equal(initialAdLayout.slotHeight, 95);
+      assert.equal(initialAdLayout.contentHeight, 105);
+      await adWindow.webContents.executeJavaScript(`(() => {
+        const style = document.createElement('style');
+        style.textContent = ${JSON.stringify(AD_SUPPRESSION_CSS)};
+        document.head.appendChild(style);
+      })()`);
+      const adLayout = await adWindow.webContents.executeJavaScript(`({
+        slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
+        contentHeight: document.querySelector('#content').getBoundingClientRect().height,
+      })`);
+      assert.equal(adLayout.slotHeight, 0);
+      assert.equal(adLayout.contentHeight - initialAdLayout.contentHeight, 95);
+    };
 
-    assert.equal(state.badges.length, 1);
-    assert.equal(state.badges[0], 'INSERT');
-    await window.webContents.executeJavaScript(`
-      (() => {
-        document.querySelector('#composer').remove();
-        return new Promise(resolve => setTimeout(resolve, 0));
-      })();
-    `);
-    assert.equal(await window.webContents.executeJavaScript(
-      'document.querySelectorAll("[data-vim-mode-badge]").length',
-    ), 0);
-
-    await replayLoad;
-    await replayWindow.webContents.executeJavaScript(injected);
-    assert.equal(await replayWindow.webContents.executeJavaScript(
-      'typeof globalThis.electronAPI?.replayOutlookShortcut',
-    ), 'function');
-    assert.equal(await replayWindow.webContents.executeJavaScript(
-      'globalThis.__oflOutlookVimInitialized === true',
-    ), true);
-    await replayWindow.webContents.executeJavaScript(`
-      globalThis.__pageKeydowns = [];
-      document.addEventListener('keydown', event => {
-        globalThis.__pageKeydowns.push({ key: event.key, trusted: event.isTrusted });
-      }, true);
-    `);
-    await replayWindow.webContents.executeJavaScript(`
-      document.querySelector('[role="option"]').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'c', bubbles: true }),
-      );
-    `);
-    await sleep(100);
-    const replayed = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
-    assert.deepEqual(replayed.filter(event => event.trusted).map(event => event.key.toUpperCase()), ['N']);
-    assert.equal(replayed.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
-
-    await replayWindow.webContents.executeJavaScript(`
-      document.querySelector('[role="option"]').dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'e', bubbles: true }),
-      );
-    `);
-    await sleep(50);
-    const passThrough = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
-    assert.equal(passThrough.filter(event => event.trusted && event.key.toUpperCase() === 'E').length, 0);
-    assert.equal(passThrough.length, replayed.length + 1);
-
-    await adWindow.loadURL(`data:text/html,${encodeURIComponent(AD_LAYOUT_HTML)}`);
-    const initialAdLayout = await adWindow.webContents.executeJavaScript(`({
-      slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
-      contentHeight: document.querySelector('#content').getBoundingClientRect().height,
-    })`);
-    assert.equal(initialAdLayout.slotHeight, 95);
-    assert.equal(initialAdLayout.contentHeight, 105);
-    await adWindow.webContents.executeJavaScript(`(() => {
-      const style = document.createElement('style');
-      style.textContent = ${JSON.stringify(AD_SUPPRESSION_CSS)};
-      document.head.appendChild(style);
-    })()`);
-    const adLayout = await adWindow.webContents.executeJavaScript(`({
-      slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
-      contentHeight: document.querySelector('#content').getBoundingClientRect().height,
-    })`);
-    assert.equal(adLayout.slotHeight, 0);
-    assert.equal(adLayout.contentHeight - initialAdLayout.contentHeight, 95);
+    await Promise.all([runComposerCase(), runReplayCase(), runAdCase()]);
   } finally {
     window.destroy();
     adWindow.destroy();

@@ -32,7 +32,9 @@ function eventShortcut(event) {
 		event?.altKey && 'alt',
 		event?.metaKey && 'cmd',
 	].filter(Boolean);
-	return { keyCode: event?.keyCode || event?.key, modifiers };
+	const key = typeof event?.key === 'string' && /^[a-z]$/.test(event.key)
+		? event.key.toUpperCase() : event?.key;
+	return { keyCode: key || event?.keyCode, modifiers };
 }
 
 function matchesShortcut(event, shortcut) {
