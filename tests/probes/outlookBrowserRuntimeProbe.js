@@ -41,8 +41,12 @@ const AD_LAYOUT_HTML = `<!doctype html>
 </body></html>`;
 
 const MAILBOX_HTML = `<!doctype html><html><body>
+  <div role="toolbar">
+    <button aria-label="New mail">New mail</button>
+    <button id="read-state" aria-label="Mark as read">Mark as read</button>
+  </div>
   <div role="listbox" aria-label="Messages">
-    <div role="option" aria-label="Unread message" aria-selected="true" data-read-state="unread" tabindex="0">Message</div>
+    <div role="option" aria-label="Message" aria-selected="true" tabindex="0">Message</div>
   </div>
 </body></html>`;
 
@@ -87,6 +91,12 @@ async function main() {
     const runComposerCase = async () => {
       await window.loadURL(`data:text/html,${encodeURIComponent(COMPOSER_HTML)}`);
       assert.equal(await window.webContents.executeJavaScript('typeof process'), 'undefined');
+      await window.webContents.executeJavaScript(`
+        globalThis.__outlookComposerEscapeCount = 0;
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape') globalThis.__outlookComposerEscapeCount++;
+        }, true);
+      `);
       await window.webContents.executeJavaScript(injected);
       await window.webContents.executeJavaScript('document.querySelector("#editor").focus()');
 
@@ -121,6 +131,24 @@ async function main() {
 
       assert.equal(state.badges.length, 1);
       assert.equal(state.badges[0], 'INSERT');
+      await window.webContents.executeJavaScript(`
+        document.querySelector('#editor').dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+      `);
+      state = await window.webContents.executeJavaScript(`({
+        badges: [...document.querySelectorAll('[data-vim-mode-badge]')].map(node => node.textContent),
+        outlookEscapeCount: globalThis.__outlookComposerEscapeCount,
+      })`);
+      assert.deepEqual(state, { badges: ['NORMAL'], outlookEscapeCount: 0 });
+      await window.webContents.executeJavaScript(`
+        document.querySelector('#editor').dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+      `);
+      assert.equal(await window.webContents.executeJavaScript(
+        'globalThis.__outlookComposerEscapeCount',
+      ), 1);
       await window.webContents.executeJavaScript(`
         (() => {
           document.querySelector('#composer').remove();
@@ -157,21 +185,30 @@ async function main() {
       await replayWindow.webContents.executeJavaScript(
         'document.querySelector(\'[role="option"]\').focus()',
       );
+      await replayWindow.webContents.executeJavaScript(`
+        globalThis.__readStateClicks = 0;
+        document.querySelector('#read-state').addEventListener('click', event => {
+          globalThis.__readStateClicks++;
+          event.currentTarget.setAttribute('aria-label', 'Mark as unread');
+          event.currentTarget.textContent = 'Mark as unread';
+        });
+      `);
       await sleep(50);
       assert.deepEqual(await replayWindow.webContents.executeJavaScript(`({
         selected: document.querySelector('[role="option"]').getAttribute('aria-selected'),
-        state: document.querySelector('[role="option"]').getAttribute('data-read-state'),
+        state: document.querySelector('#read-state').getAttribute('aria-label'),
         active: document.activeElement === document.querySelector('[role="option"]'),
-      })`), { selected: 'true', state: 'unread', active: true });
+      })`), { selected: 'true', state: 'Mark as read', active: true });
       const replayInputCountBeforeQ = replayInputs.length;
       await sendPhysicalKey('q');
       await sleep(100);
       const afterRead = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
-      assert.equal(afterRead.filter(event => event.trusted && event.key.toUpperCase() === 'Q').length, 1);
-      assert.equal(afterRead.filter(event => event.trusted && event.key === 'q').length, 1);
+      assert.equal(afterRead.filter(event => event.trusted && event.key === 'q').length, 0);
+      assert.deepEqual(await replayWindow.webContents.executeJavaScript(`({
+        clicks: globalThis.__readStateClicks,
+        state: document.querySelector('#read-state').getAttribute('aria-label'),
+      })`), { clicks: 1, state: 'Mark as unread' });
       const qInputs = replayInputs.slice(replayInputCountBeforeQ);
-      // Chromium reports the intercepted Q input as lowercase in this probe;
-      // the trusted page event above is the semantic native-Q assertion.
       assert.deepEqual(qInputs.map(input => input.keyCode), ['q', 'q']);
       assert.deepEqual(qInputs.map(input => input.type), ['keyDown', 'keyUp']);
       await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns = []');
@@ -182,14 +219,14 @@ async function main() {
       const replayInputsAfterCompose = replayInputs.filter(input => input.keyCode === 'N');
       assert.deepEqual(replayInputsAfterCompose.map(input => input.type), ['keyDown', 'keyUp']);
       assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
-      assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
+      assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 0);
       const replayInputCountBeforeE = replayInputs.length;
       const replayNCountBeforeE = replayInputsAfterCompose.length;
       await sendPhysicalKey('e');
       await sleep(100);
       const keydowns = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
-      assert.equal(keydowns.filter(event => event.trusted).length, 3);
-      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
+      assert.equal(keydowns.filter(event => event.trusted).length, 2);
+      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 0);
       assert.equal(keydowns.filter(event => event.trusted && event.key === 'e').length, 1);
       assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
       const inputsAfterE = replayInputs.slice(replayInputCountBeforeE);

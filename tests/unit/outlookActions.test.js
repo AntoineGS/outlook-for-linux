@@ -1034,6 +1034,20 @@ test('readContext replays markUnread for a semantically read selected row', () =
   assert.deepEqual(calls, ['markUnread']);
 });
 
+test('readContext uses the selected conversation toolbar state when row state is unavailable', () => {
+  const row = mailboxRow({ selected: 'true', read: 'unknown' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  const compose = new Node('button', { 'aria-label': 'New mail' });
+  const read = new Node('button', { 'aria-label': 'Mark as read' });
+  const toolbar = new Node('div', { role: 'toolbar' }, [compose, read]);
+  const calls = [];
+  const vim = actions.createOutlookActions({ replayShortcut: id => { calls.push(id); return true; } });
+
+  assert.equal(vim.readContext(documentWith(toolbar, list), eventAt(row)), true);
+  assert.equal(read.clickCount, 1);
+  assert.deepEqual(calls, []);
+});
+
 test('moveRight opens a selected row and moveLeft collapses an expanded conversation', () => {
   const row = mailboxRow({ selected: 'true' });
   const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);

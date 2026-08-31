@@ -101,7 +101,7 @@ function createVimBindings({ actions = null, createActions = outlookActions.crea
 	function detachDocument(document) {
 		const record = documentRecords.get(document);
 		if (!record) return;
-		document.removeEventListener?.('keydown', record.keydownHandler, true);
+		record.keydownTarget.removeEventListener?.('keydown', record.keydownHandler, true);
 		documentRecords.delete(document);
 		if (record.managed) {
 			record.editing.destroy?.();
@@ -113,7 +113,9 @@ function createVimBindings({ actions = null, createActions = outlookActions.crea
 		if (!document || documentRecords.has(document) || destroyed) return;
 		const resolver = createCommandResolver(resolvedActions);
 		const editingRecord = editingForDocument(document);
-		const record = { resolver, keydownHandler: null,
+		// Window capture runs before Outlook's pre-existing document key handlers.
+		const keydownTarget = document.defaultView || document;
+		const record = { resolver, keydownHandler: null, keydownTarget,
 			editing: editingRecord.controller, managed: editingRecord.managed };
 		record.keydownHandler = event => {
 			if (replayClient.shouldBypass(event)) return;
@@ -122,7 +124,7 @@ function createVimBindings({ actions = null, createActions = outlookActions.crea
 		};
 		documentRecords.set(document, record);
 		record.editing.init?.(config);
-		document.addEventListener?.('keydown', record.keydownHandler, true);
+		record.keydownTarget.addEventListener?.('keydown', record.keydownHandler, true);
 	}
 
 	function init(nextConfig) {

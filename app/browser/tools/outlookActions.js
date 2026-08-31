@@ -580,6 +580,9 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     const context = resolveContext(document, event);
     if (context === 'message-list') {
       const row = getSelectedRow(document, getMessageRows(document));
+      if (row && activateLabeledControls([row], ACTION_LABELS.toggleRead, 'readContext')) return true;
+      const toolbar = getUniqueCommandToolbar(document);
+      if (toolbar && activateLabeledControls([toolbar], ACTION_LABELS.toggleRead, 'readContext')) return true;
       const state = selectedState(row);
       if (state.read === null) return false;
       return replayFor(replayShortcut, state.read ? 'markUnread' : 'markRead', document, event, () => false);
