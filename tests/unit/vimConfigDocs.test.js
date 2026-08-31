@@ -9,12 +9,29 @@ const configurationGuide = fs.readFileSync(
 	path.join(__dirname, '../../docs-site/docs/configuration.md'),
 	'utf8',
 );
+const vimSectionStart = configurationGuide.indexOf('#### Vim Shortcuts');
+const vimSectionEnd = configurationGuide.indexOf('### MQTT Integration', vimSectionStart);
+const vimSection = configurationGuide.slice(vimSectionStart, vimSectionEnd);
+const normalizedVimSection = vimSection.replace(/\s+/g, ' ');
 
-test('documents the Vim prerequisite and every mailbox sequence', () => {
+function inlineCode(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+test('documents the Vim prerequisite and every mailbox binding', () => {
 	const vimField = options.shortcuts.fields['vim.enabled'];
 	assert.match(vimField.describe, /Outlook default keyboard shortcuts/);
 	assert.match(vimField.describe, /Settings > General > Accessibility > Keyboard shortcuts/);
-	for (const { sequence } of MAILBOX_BINDINGS) {
-		assert.ok(configurationGuide.includes('`' + sequence + '`'));
+	assert.notEqual(vimSectionStart, -1);
+	assert.ok(vimSectionEnd > vimSectionStart);
+	assert.match(
+		normalizedVimSection,
+		/In a message list, `q` toggles the selected conversation read\/unread; in the reading pane, it marks only the selected individual message unread\./,
+	);
+	for (const { sequence, action } of MAILBOX_BINDINGS) {
+		assert.match(
+			vimSection,
+			new RegExp('\\| `' + inlineCode(sequence) + '` \\| `' + inlineCode(action) + '` \\|'),
+		);
 	}
 });

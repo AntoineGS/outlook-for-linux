@@ -601,18 +601,60 @@ mailbox commands do not run while typing in an editable field.
 
 The authoritative mailbox keymap is:
 
-| Group | Keys | Action |
-|-------|------|--------|
-| Single keys | `c`, `C`, `o`, `Enter`, `l`, `O`, `Escape`, `e`, `d`, `D`, `r`, `R`, `a`, `A`, `f`, `F`, `u`, `q`, `s`, `j`, `k`, `G`, `h`, `p`, `n`, `?` | Compose, open, archive, delete, reply, forward, undo/read, flag, message navigation, context navigation, or shortcut help |
-| Modified keys | `Ctrl+r`, `Ctrl+u`, `Ctrl+d` | Redo, page up, page down |
-| `g` navigation | `gg`, `gn`, `gp`, `gi`, `gs`, `gb`, `gt`, `gd`, `ga`, `gk`, `gl` | Start context, next/previous page, inbox, starred, snoozed, sent, drafts, all mail, tasks, label |
-| `v` selection | `va`, `vr`, `vu`, `vs`, `vt` | Select all, read, unread, starred, unstarred |
+| Group | Sequence | Action | Description |
+|-------|----------|--------|-------------|
+| Single keys | `c` | `composeMessage` | Open a new message composer |
+| Single keys | `C` | `composeMessageNewTab` | Open a new message composer in a tab |
+| Single keys | `o` | `moveRight` | Open the selected conversation or move into the next context |
+| Single keys | `Enter` | `moveRight` | Open the selected conversation or move into the next context |
+| Single keys | `l` | `moveRight` | Move right into the selected conversation or context |
+| Single keys | `O` | `openMessageNewWindow` | Open the selected message in a new window |
+| Single keys | `Escape` | `escapeContext` | Leave the current context or clear its selection |
+| Single keys | `e` | `archiveMessage` | Archive the selected conversation |
+| Single keys | `d` | `deleteMessage` | Move the selected conversation to Deleted Items |
+| Single keys | `D` | `permanentlyDeleteMessage` | Permanently delete the selected conversation |
+| Single keys | `r` | `reply` | Reply to the selected message |
+| Single keys | `R` | `replyNewWindow` | Reply to the selected message in a new window |
+| Single keys | `a` | `replyAll` | Reply to all recipients |
+| Single keys | `A` | `replyAllNewWindow` | Reply to all recipients in a new window |
+| Single keys | `f` | `forward` | Forward the selected message |
+| Single keys | `F` | `forwardNewWindow` | Forward the selected message in a new window |
+| Single keys | `u` | `undoContext` | Undo the current context action |
+| Single keys | `q` | `readContext` | In a message list, toggle the selected conversation read/unread; in the reading pane, mark only the selected individual message unread |
+| Single keys | `s` | `toggleFlag` | Toggle the flag on the selected conversation |
+| Single keys | `j` | `nextMessage` | Move to the next message |
+| Single keys | `k` | `previousMessage` | Move to the previous message |
+| Single keys | `G` | `endContext` | Move to the end of the current context |
+| Single keys | `h` | `moveLeft` | Move left out of the current conversation or context |
+| Single keys | `p` | `previousConversationMessage` | Move to the previous message in the conversation |
+| Single keys | `n` | `nextConversationMessage` | Move to the next message in the conversation |
+| Single keys | `?` | `shortcutHelp` | Show shortcut help |
+| Modified keys | `Ctrl+r` | `redoContext` | Redo the current context action |
+| Modified keys | `Ctrl+u` | `pageUp` | Move up one page |
+| Modified keys | `Ctrl+d` | `pageDown` | Move down one page |
+| `g` navigation | `gg` | `startContext` | Move to the start of the current context |
+| `g` navigation | `gn` | `nextPage` | Move to the next page |
+| `g` navigation | `gp` | `previousPage` | Move to the previous page |
+| `g` navigation | `gi` | `inbox` | Go to Inbox |
+| `g` navigation | `gs` | `starred` | Go to Starred |
+| `g` navigation | `gb` | `snoozed` | Go to Snoozed |
+| `g` navigation | `gt` | `sent` | Go to Sent Items |
+| `g` navigation | `gd` | `drafts` | Go to Drafts |
+| `g` navigation | `ga` | `allMail` | Go to All Mail |
+| `g` navigation | `gk` | `tasks` | Go to Tasks |
+| `g` navigation | `gl` | `label` | Go to a label |
+| `v` selection | `va` | `selectAll` | Select all visible messages |
+| `v` selection | `vr` | `selectRead` | Select read messages |
+| `v` selection | `vu` | `selectUnread` | Select unread messages |
+| `v` selection | `vs` | `selectStarred` | Select starred messages |
+| `v` selection | `vt` | `selectUnstarred` | Select unstarred messages |
 
 Overloaded keys follow the active context: `l` moves right and `h` moves left;
-`q` marks the current context read; `Escape` (also shown as `Esc`) exits the
-current context; `gg` starts the current context while `G` ends it; `u` undoes
-the current context; and `Ctrl+r` redoes it. Prefixes `g` and `v` wait for the
-next key, so incomplete prefixes are not actions.
+In a message list, `q` toggles the selected conversation read/unread; in the
+reading pane, it marks only the selected individual message unread. `Escape`
+(also shown as `Esc`) exits the current context; `gg` starts the current context
+while `G` ends it; `u` undoes the current context; and `Ctrl+r` redoes it.
+Prefixes `g` and `v` wait for the next key, so incomplete prefixes are not actions.
 
 ### MQTT Integration
 
