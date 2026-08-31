@@ -202,10 +202,6 @@ function getActionRoots(document, selectors) {
   return [...new Set(selectors.flatMap((selector) => toArray(document.querySelectorAll(selector))))];
 }
 
-function activateLabeledControl(document, labels, selectors = MAIL_SCOPE_SELECTORS) {
-  return activateLabeledControls(getActionRoots(document, selectors), labels);
-}
-
 function activateLabeledControls(roots, labels, actionId = 'control') {
   const matchesByControl = new Map();
   for (const root of roots) {
@@ -653,15 +649,14 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     composeMessage: ['message-list', 'reading'], composeMessageNewTab: ['message-list', 'reading'],
     openMessageNewWindow: ['message-list', 'reading'], archiveMessage: ['message-list', 'reading'],
     deleteMessage: ['message-list', 'reading'], permanentlyDeleteMessage: ['message-list', 'reading'],
-    reply: ['message-list', 'reading'], replyNewWindow: ['message-list', 'reading'],
-    replyAll: ['message-list', 'reading'], replyAllNewWindow: ['message-list', 'reading'],
-    forward: ['message-list', 'reading'], forwardNewWindow: ['message-list', 'reading'],
+    replyNewWindow: ['message-list', 'reading'], replyAllNewWindow: ['message-list', 'reading'],
+    forwardNewWindow: ['message-list', 'reading'],
     toggleFlag: ['message-list', 'reading'], readContext: ['message-list', 'reading'],
-    nextMessage: ['message-list'], previousMessage: ['message-list'], firstMessage: ['message-list'],
-    lastMessage: ['message-list'], selectAll: ['message-list', 'multi-selection'],
+    nextMessage: ['message-list'], previousMessage: ['message-list'], selectAll: ['message-list', 'multi-selection'],
     selectRead: ['message-list', 'multi-selection'], selectUnread: ['message-list', 'multi-selection'],
     selectStarred: ['message-list', 'multi-selection'], selectUnstarred: ['message-list', 'multi-selection'],
     previousConversationMessage: ['reading'], nextConversationMessage: ['reading'],
+    nextPage: ['message-list', 'reading'], previousPage: ['message-list', 'reading'],
     pageUp: ['message-list', 'reading'], pageDown: ['message-list', 'reading'],
     startContext: ['message-list', 'reading'], endContext: ['message-list', 'reading'],
     moveRight: ['folder', 'message-list'], moveLeft: ['folder', 'message-list'],
@@ -670,6 +665,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     label: ['message-list', 'reading'], undoContext: ['message-list', 'reading'],
     redoContext: ['message-list', 'reading'], undo: ['message-list', 'reading'], redo: ['message-list', 'reading'],
     searchMail: ['message-list', 'reading'], shortcutHelp: ['message-list', 'reading'],
+    escapeContext: ['multi-selection', 'message-list', 'reading'],
   };
   for (const [name, action] of Object.entries(actions)) {
     if (name === 'resolveContext' || name === 'escapeContext' || name === '_test') continue;
@@ -678,7 +674,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
         const context = resolveContext(document, event);
         if (context === 'guarded' || context === null) {
           if (!['undo', 'redo', 'undoContext', 'redoContext', 'label'].includes(name) || !isToolbarSurface(document, event)) return false;
-        } else if (allowedContexts[name] && !allowedContexts[name].includes(context)) return false;
+        } else if (!allowedContexts[name] || !allowedContexts[name].includes(context)) return false;
       }
       return action(document, event);
     };
@@ -687,6 +683,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
   actions._test = {
     findLabeledControl,
     resolveContext,
+    allowedContexts,
     setLogger(nextLogger) {
       const previous = logger;
       logger = nextLogger;

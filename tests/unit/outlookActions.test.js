@@ -1169,3 +1169,25 @@ test('message and list actions are rejected across unrelated contexts', () => {
     assert.equal(vim[action](documentWith(reading), eventAt(reading)), false);
   }
 });
+
+test('every mailbox binding has an explicit allowed-context matrix entry', () => {
+  const { MAILBOX_BINDINGS } = require('../../app/browser/tools/vimMailboxKeymap');
+  const missing = [...new Set(MAILBOX_BINDINGS.map(({ action }) => action))]
+    .filter(action => !actions._test.allowedContexts[action]);
+  assert.deepEqual(missing, []);
+});
+
+test('gn and gp reject folder contexts and replay in valid message contexts', () => {
+  const folderControl = new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' });
+  const folder = new Node('div', { role: 'tree' }, [folderControl]);
+  const calls = [];
+  const vim = actions.createOutlookActions({ replayShortcut: id => { calls.push(id); return true; } });
+  assert.equal(vim.nextPage(documentWith(folder), eventAt(folderControl)), false);
+  assert.equal(vim.previousPage(documentWith(folder), eventAt(folderControl)), false);
+
+  const row = mailboxRow({ selected: 'true' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  assert.equal(vim.nextPage(documentWith(list), eventAt(row)), true);
+  assert.equal(vim.previousPage(documentWith(list), eventAt(row)), true);
+  assert.deepEqual(calls, ['pageDown', 'pageUp']);
+});
