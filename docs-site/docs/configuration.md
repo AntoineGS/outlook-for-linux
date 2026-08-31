@@ -582,8 +582,37 @@ A floating sticker panel that lists image files from a local folder and pastes t
 |--------|------|---------|-------------|
 | `shortcuts.global` | `array` | `[]` | Global keyboard shortcuts that work system-wide (opt-in, disabled by default). See [Global Shortcuts](#global-shortcuts) |
 | `shortcuts.disableWhileFocused` | `array` | `[]` | Array of global shortcuts to disable while app is in focus |
+| `shortcuts.vim.enabled` | `boolean` | `false` | Enable Vim-style Outlook navigation and composer editing (requires Outlook default keyboard shortcuts) |
 | `globalShortcuts` | `array` | `[]` | Deprecated, use `shortcuts.global` |
 | `disableGlobalShortcuts` | `array` | `[]` | Deprecated, use `shortcuts.disableWhileFocused` |
+
+#### Vim Shortcuts
+
+Set `shortcuts.vim.enabled` to `true` to enable Vim-style navigation outside editable
+fields and Vim editing in Outlook message composers. Outlook's default keyboard
+shortcuts must also be enabled at **Settings > General > Accessibility > Keyboard
+shortcuts**. To restore Outlook's default shortcut scheme, disable
+`shortcuts.vim.enabled` and enable Outlook default keyboard shortcuts in that same
+settings path.
+
+Outside editable fields, the mailbox context takes precedence over browser-level
+navigation. In message composers, the Vim editing keymap takes precedence instead;
+mailbox commands do not run while typing in an editable field.
+
+The authoritative mailbox keymap is:
+
+| Group | Keys | Action |
+|-------|------|--------|
+| Single keys | `c`, `C`, `o`, `Enter`, `l`, `O`, `Escape`, `e`, `d`, `D`, `r`, `R`, `a`, `A`, `f`, `F`, `u`, `q`, `s`, `j`, `k`, `G`, `h`, `p`, `n`, `?` | Compose, open, archive, delete, reply, forward, undo/read, flag, message navigation, context navigation, or shortcut help |
+| Modified keys | `Ctrl+r`, `Ctrl+u`, `Ctrl+d` | Redo, page up, page down |
+| `g` navigation | `gg`, `gn`, `gp`, `gi`, `gs`, `gb`, `gt`, `gd`, `ga`, `gk`, `gl` | Start context, next/previous page, inbox, starred, snoozed, sent, drafts, all mail, tasks, label |
+| `v` selection | `va`, `vr`, `vu`, `vs`, `vt` | Select all, read, unread, starred, unstarred |
+
+Overloaded keys follow the active context: `l` moves right and `h` moves left;
+`q` marks the current context read; `Escape` (also shown as `Esc`) exits the
+current context; `gg` starts the current context while `G` ends it; `u` undoes
+the current context; and `Ctrl+r` redoes it. Prefixes `g` and `v` wait for the
+next key, so incomplete prefixes are not actions.
 
 ### MQTT Integration
 

@@ -258,7 +258,7 @@ Object options group several related settings. The tables below list each nested
 |-------|------|---------|-------------|
 | `shortcuts.global` | `array` | `[]` | Global keyboard shortcuts that work system-wide. Disabled by default (opt-in). See configuration docs for details and limitations |
 | `shortcuts.disableWhileFocused` | `array` | `[]` | Array of global shortcuts to disable while the app is in focus. See https://www.electronjs.org/docs/latest/api/accelerator for available accelerators to use |
-| `shortcuts.vim.enabled` | `boolean` | `false` | Enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Disabled by default. |
+| `shortcuts.vim.enabled` | `boolean` | `false` | Enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Requires Outlook default keyboard shortcuts enabled in Settings &gt; General &gt; Accessibility &gt; Keyboard shortcuts. Disabled by default. |
 
 ### storage
 

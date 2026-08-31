@@ -1103,7 +1103,9 @@ module.exports = {
             type: "boolean",
             describe:
               "Enable Vim-style Outlook navigation outside editable fields and automatic " +
-              "Vim editing in Outlook message composers. Disabled by default.",
+              "Vim editing in Outlook message composers. Requires Outlook default keyboard " +
+              "shortcuts enabled in Settings > General > Accessibility > Keyboard shortcuts. " +
+              "Disabled by default.",
           },
         },
         applyMode: "restart",

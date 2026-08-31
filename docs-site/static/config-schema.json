@@ -1226,7 +1226,7 @@
           "path": "vim.enabled",
           "type": "boolean",
           "default": false,
-          "description": "Enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Disabled by default."
+          "description": "Enable Vim-style Outlook navigation outside editable fields and automatic Vim editing in Outlook message composers. Requires Outlook default keyboard shortcuts enabled in Settings > General > Accessibility > Keyboard shortcuts. Disabled by default."
         }
       ]
     },
