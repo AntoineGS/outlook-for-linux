@@ -12,6 +12,7 @@ const EXPECTED = {
 	q: 'readContext', s: 'toggleFlag', j: 'nextMessage', k: 'previousMessage',
 	G: 'endContext', h: 'moveLeft', p: 'previousConversationMessage',
 	n: 'nextConversationMessage', '?': 'shortcutHelp',
+	'/': 'searchMail',
 	'Ctrl+r': 'redoContext', 'Ctrl+u': 'pageUp', 'Ctrl+d': 'pageDown',
 	gg: 'startContext', gn: 'nextPage', gp: 'previousPage', gi: 'inbox',
 	gs: 'starred', gb: 'snoozed', gt: 'sent', gd: 'drafts', ga: 'allMail',
@@ -59,4 +60,9 @@ test('normalizes only exact Ctrl bindings and passes through unknown commands', 
 	assert.deepEqual(lookupMailboxCommand(createEvent('x'), 'g'), {
 		action: null, nextPrefix: null, handled: false,
 	});
+});
+
+test('maps slash to native Outlook search and preserves physical pass-through lookup', () => {
+	assert.equal(lookupMailboxCommand(createEvent('/'), null).action, 'searchMail');
+	assert.equal(lookupMailboxCommand(createEvent('/', { altKey: true }), null).handled, false);
 });

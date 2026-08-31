@@ -629,6 +629,7 @@ The authoritative mailbox keymap is:
 | Single keys | `p` | `previousConversationMessage` | Move to the previous message in the conversation |
 | Single keys | `n` | `nextConversationMessage` | Move to the next message in the conversation |
 | Single keys | `?` | `shortcutHelp` | Show shortcut help |
+| Single keys | `/` | `searchMail` | Focus Outlook search using its native shortcut |
 | Modified keys | `Ctrl+r` | `redoContext` | Redo the current context action |
 | Modified keys | `Ctrl+u` | `pageUp` | Move up one page |
 | Modified keys | `Ctrl+d` | `pageDown` | Move down one page |

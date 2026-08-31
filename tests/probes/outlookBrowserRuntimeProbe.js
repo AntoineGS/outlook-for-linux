@@ -42,7 +42,7 @@ const AD_LAYOUT_HTML = `<!doctype html>
 
 const MAILBOX_HTML = `<!doctype html><html><body>
   <div role="listbox" aria-label="Messages">
-    <div role="option" aria-label="Read message" tabindex="0">Message</div>
+    <div role="option" aria-label="Unread message" aria-selected="true" data-read-state="unread" tabindex="0">Message</div>
   </div>
 </body></html>`;
 
@@ -158,6 +158,24 @@ async function main() {
         'document.querySelector(\'[role="option"]\').focus()',
       );
       await sleep(50);
+      assert.deepEqual(await replayWindow.webContents.executeJavaScript(`({
+        selected: document.querySelector('[role="option"]').getAttribute('aria-selected'),
+        state: document.querySelector('[role="option"]').getAttribute('data-read-state'),
+        active: document.activeElement === document.querySelector('[role="option"]'),
+      })`), { selected: 'true', state: 'unread', active: true });
+      const replayInputCountBeforeQ = replayInputs.length;
+      await sendPhysicalKey('q');
+      await sleep(100);
+      const afterRead = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
+      assert.equal(afterRead.filter(event => event.trusted && event.key.toUpperCase() === 'Q').length, 1);
+      assert.equal(afterRead.filter(event => event.trusted && event.key === 'q').length, 1);
+      const qInputs = replayInputs.slice(replayInputCountBeforeQ);
+      // Chromium reports the intercepted Q input as lowercase in this probe;
+      // the trusted page event above is the semantic native-Q assertion.
+      assert.deepEqual(qInputs.map(input => input.keyCode), ['q', 'q']);
+      assert.deepEqual(qInputs.map(input => input.type), ['keyDown', 'keyUp']);
+      await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns = []');
+      replayInputs.length = 0;
       await sendPhysicalKey('c');
       await sleep(100);
       const afterCompose = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');

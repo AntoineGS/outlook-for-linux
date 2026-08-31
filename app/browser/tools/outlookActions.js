@@ -6,6 +6,7 @@ const NATIVE_SHORTCUTS = {
   archive: { keyCode: 'e', modifiers: [] },
   reply: { keyCode: 'r', modifiers: [] },
   shortcutHelp: { keyCode: '/', modifiers: ['shift'] },
+  search: { keyCode: 'Q', modifiers: ['alt'] },
 };
 const ACTION_LABELS = {
   back: ['Back', 'Close'],
@@ -105,9 +106,9 @@ function isEligibleMessageList(listbox) {
   const rows = toArray(listbox.querySelectorAll?.('[role="option"]'));
   if (rows.length === 0) return false;
   const label = normalizeLabel(getAttribute(listbox, 'aria-label'));
-  const hasSemanticLabel = /\b(message|mail|inbox|sent|draft)\b/.test(label);
+  const hasSemanticLabel = /\b(messages?|mails?|inbox|sent|draft)\b/.test(label);
   const hasMessageRowSemantics = rows.some((row) =>
-    /\b(?:unread|read)(?:\s+(?:collapsed|expanded))?\b/.test(normalizeLabel(getAttribute(row, 'aria-label'))));
+    getAttribute(row, 'data-read-state') || getAttribute(row, 'aria-read-state'));
   return hasSemanticLabel || hasMessageRowSemantics;
 }
 
@@ -374,8 +375,8 @@ function resolveContext(document, event) {
   const folders = uniqueRoots(document, FOLDER_SCOPE_SELECTORS, node, event);
   const lists = uniqueRoots(document, ['[role="listbox"]'], node, event)
     .filter((list) => toArray(list.querySelectorAll?.('[role="option"]')).some((row) =>
-      /\b(?:unread|read)(?:\s+(?:collapsed|expanded))?\b/.test(normalizeLabel(getAttribute(row, 'aria-label')))
-      || /\b(?:message|mail|inbox|sent|draft)\b/.test(normalizeLabel(getAttribute(list, 'aria-label')))));
+      getAttribute(row, 'data-read-state') || getAttribute(row, 'aria-read-state')
+      || /\b(?:messages?|mails?|inbox|sent|draft)\b/.test(normalizeLabel(getAttribute(list, 'aria-label')))));
   const readings = uniqueRoots(document, ['[role="region"]'], node, event)
     .filter((region) => isReadingRegion(region, event, document));
   const candidates = [folders, lists, readings].filter((roots) => roots.length > 0);
@@ -397,9 +398,10 @@ function replayFor(replayShortcut, id, document, event, legacy) {
 }
 
 function selectedState(row) {
-  const tokens = normalizeLabel(getAttribute(row, 'aria-label')).split(/[^a-z]+/).filter(Boolean);
-  const read = tokens.includes('unread') ? false : tokens.includes('read') ? true : null;
-  const flagged = tokens.includes('flagged') ? true : tokens.includes('unflagged') || tokens.includes('unstarred') ? false : null;
+  const readValue = getAttribute(row, 'data-read-state') || getAttribute(row, 'aria-read-state');
+  const flagValue = getAttribute(row, 'data-flag-state') || getAttribute(row, 'aria-flag-state');
+  const read = readValue === 'read' ? true : readValue === 'unread' ? false : null;
+  const flagged = flagValue === 'flagged' ? true : flagValue === 'unflagged' ? false : null;
   return { read, flagged };
 }
 
@@ -454,9 +456,17 @@ function clearMultiSelection(document) {
 }
 
 function contextControl(document, labels, event) {
-  const reading = getActionRoots(document, ['[role="region"]'])
-    .filter((region) => isVisible(region) && isReadingRegion(region, event, document));
-  return activateLabeledControls(reading, labels);
+  const message = activeIndividualMessage(document, event);
+  return message ? activateLabeledControls([message], labels) : null;
+}
+
+function activeIndividualMessage(document, event) {
+  const roots = activeReadingRoots(document, event);
+  if (roots.length !== 1) return null;
+  const messages = toArray(roots[0].querySelectorAll?.('[data-message-id], [role="article"]')).filter(isVisible);
+  const target = focusNode(document, event);
+  const matches = messages.filter(message => containsNode(message, target));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function activeReadingRoots(document, event) {
@@ -517,6 +527,7 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     openMessage: (document) => selectRow(getSelectedRow(document, getMessageRows(document))),
     back: actionForLabel('back'),
     search,
+    searchMail: native('search', () => search(document)),
     compose: actionForLabel('compose'),
     reply: native('reply', actionForLabel('reply')),
     replyAll: native('replyAll', actionForLabel('replyAll')),
@@ -584,7 +595,10 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
     const context = resolveContext(document, event);
     if (context === 'guarded') return 'pass-through';
     if (context === 'multi-selection') return clearMultiSelection(document);
-    return Boolean(activateLabeledControl(document, ACTION_LABELS.back));
+    if (!['message-list', 'reading'].includes(context)) return false;
+    return Boolean(activateLabeledControls(
+      context === 'reading' ? activeReadingRoots(document, event) : getActionRoots(document, MAIL_SCOPE_SELECTORS),
+      ACTION_LABELS.back, 'escapeContext'));
   };
   actions.startContext = (document, event) => {
     const context = resolveContext(document, event);
@@ -629,12 +643,42 @@ function createOutlookActions({ replayShortcut = () => false } = {}) {
   actions.undoContext = actions.undo;
   actions.redoContext = actions.redo;
 
+  const allowedContexts = {
+    compose: ['message-list', 'reading'], composeNewTab: ['message-list', 'reading'],
+    archive: ['message-list', 'reading'], toggleRead: ['message-list', 'reading'],
+    back: ['message-list', 'reading'], search: ['message-list', 'reading'],
+    reply: ['message-list', 'reading'], replyAll: ['message-list', 'reading'], forward: ['message-list', 'reading'],
+    collapseConversation: ['message-list'], expandConversation: ['message-list'], openMessage: ['message-list'],
+    firstMessage: ['message-list'], lastMessage: ['message-list'],
+    composeMessage: ['message-list', 'reading'], composeMessageNewTab: ['message-list', 'reading'],
+    openMessageNewWindow: ['message-list', 'reading'], archiveMessage: ['message-list', 'reading'],
+    deleteMessage: ['message-list', 'reading'], permanentlyDeleteMessage: ['message-list', 'reading'],
+    reply: ['message-list', 'reading'], replyNewWindow: ['message-list', 'reading'],
+    replyAll: ['message-list', 'reading'], replyAllNewWindow: ['message-list', 'reading'],
+    forward: ['message-list', 'reading'], forwardNewWindow: ['message-list', 'reading'],
+    toggleFlag: ['message-list', 'reading'], readContext: ['message-list', 'reading'],
+    nextMessage: ['message-list'], previousMessage: ['message-list'], firstMessage: ['message-list'],
+    lastMessage: ['message-list'], selectAll: ['message-list', 'multi-selection'],
+    selectRead: ['message-list', 'multi-selection'], selectUnread: ['message-list', 'multi-selection'],
+    selectStarred: ['message-list', 'multi-selection'], selectUnstarred: ['message-list', 'multi-selection'],
+    previousConversationMessage: ['reading'], nextConversationMessage: ['reading'],
+    pageUp: ['message-list', 'reading'], pageDown: ['message-list', 'reading'],
+    startContext: ['message-list', 'reading'], endContext: ['message-list', 'reading'],
+    moveRight: ['folder', 'message-list'], moveLeft: ['folder', 'message-list'],
+    inbox: ['folder'], flagged: ['folder'], starred: ['folder'], snoozed: ['folder'],
+    sent: ['folder'], drafts: ['folder'], allMail: ['folder'], tasks: ['folder'],
+    label: ['message-list', 'reading'], undoContext: ['message-list', 'reading'],
+    redoContext: ['message-list', 'reading'], undo: ['message-list', 'reading'], redo: ['message-list', 'reading'],
+    searchMail: ['message-list', 'reading'], shortcutHelp: ['message-list', 'reading'],
+  };
   for (const [name, action] of Object.entries(actions)) {
     if (name === 'resolveContext' || name === 'escapeContext' || name === '_test') continue;
     actions[name] = (document, event) => {
       if (event !== undefined && isContextSignal(document, event)) {
         const context = resolveContext(document, event);
-        if (context === 'guarded' || (context === null && !isToolbarSurface(document, event))) return false;
+        if (context === 'guarded' || context === null) {
+          if (!['undo', 'redo', 'undoContext', 'redoContext', 'label'].includes(name) || !isToolbarSurface(document, event)) return false;
+        } else if (allowedContexts[name] && !allowedContexts[name].includes(context)) return false;
       }
       return action(document, event);
     };

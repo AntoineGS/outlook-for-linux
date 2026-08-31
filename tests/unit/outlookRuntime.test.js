@@ -340,6 +340,13 @@ describe('Outlook runtime boundary', () => {
     assert.match(readFileSync(join(ROOT, '.gitignore'), 'utf8'), /^\/app\/browser\/generated\/$/m);
   });
 
+  it('keeps IPC documentation discovery narrow and avoids global channel dedupe', () => {
+	    const generator = readFileSync(join(ROOT, 'scripts', 'generateIpcDocs.js'), 'utf8');
+    assert.ok(generator.includes(String.raw`ipcMain\.(handle|on|once)`));
+    assert.doesNotMatch(generator, /registerFeatureIpc\(/);
+    assert.doesNotMatch(generator, /findIndex\(candidate => candidate\.name === channel\.name\)/);
+	});
+
   it('keeps unread-count on the generic tray and badge APIs', () => {
     assert.match(preloadSource, /addEventListener\("unread-count"/);
     assert.match(preloadSource, /electronAPI\.updateTray\(/);

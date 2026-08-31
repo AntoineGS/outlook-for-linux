@@ -59,7 +59,7 @@ function extractIpcChannels() {
     process.exit(1);
   }
 
-  const grepCommand = String.raw`rg -n "ipcMain\.(handle|on|once)\(|registerFeatureIpc\(" --type js ${APP_DIR}`;
+  const grepCommand = String.raw`rg -n "ipcMain\.(handle|on|once)\(" --type js ${APP_DIR}`;
 
   let output;
   try {
@@ -82,16 +82,13 @@ function extractIpcChannels() {
 
     const [, filePath, lineNumber, content] = match;
     const channelMatch = content.match(/ipcMain\.(handle|on|once)\(\s*["']([^"']+)["']/);
-    const featureChannelMatch = content.match(/registerFeatureIpc\([^,]+,\s*["'](handle|on|once)["'],\s*["']([^"']+)["']/);
     const settingsChannelMatch = content.match(/ipcMain\.once\(product\.settingsChannels\.(get|set)/);
-    if (!channelMatch && !featureChannelMatch && !settingsChannelMatch) return null;
+    if (!channelMatch && !settingsChannelMatch) return null;
 
     let type;
     let channelName;
     if (channelMatch) {
       [, type, channelName] = channelMatch;
-    } else if (featureChannelMatch) {
-      [, type, channelName] = featureChannelMatch;
     } else {
       type = 'once';
       const productSource = fs.readFileSync(path.join(APP_DIR, 'product.js'), 'utf8');
@@ -117,8 +114,7 @@ function extractIpcChannels() {
       lineNumber,
       description,
     };
-  }).filter(Boolean).filter((channel, index, channels) =>
-    channels.findIndex(candidate => candidate.name === channel.name) === index);
+  }).filter(Boolean);
 }
 
 function extractDescription(filePath, lineIndex) {

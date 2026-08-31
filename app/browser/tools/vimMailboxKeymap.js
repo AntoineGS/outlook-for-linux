@@ -7,7 +7,7 @@ const SINGLE = Object.freeze({
 	f: 'forward', F: 'forwardNewWindow', u: 'undoContext', q: 'readContext',
 	s: 'toggleFlag', j: 'nextMessage', k: 'previousMessage', G: 'endContext',
 	h: 'moveLeft', p: 'previousConversationMessage', n: 'nextConversationMessage',
-	'?': 'shortcutHelp',
+	'?': 'shortcutHelp', '/': 'searchMail',
 });
 const MODIFIED = Object.freeze({
 	'Ctrl+r': 'redoContext', 'Ctrl+u': 'pageUp', 'Ctrl+d': 'pageDown',

@@ -38,6 +38,7 @@ class Node {
     const searchInput = selector.includes('[type="search"]');
     const checkbox = selector.includes('[type="checkbox"]');
     const checked = selector.match(/\[aria-checked="([^"]+)"\]/)?.[1];
+    const dataMessage = selector.includes('[data-message-id]');
     const hasLabel = selector === '[aria-label]';
     const tag = selector.match(/^[a-z]+/i)?.[0];
     return (!tag || this.tagName === tag.toUpperCase())
@@ -49,7 +50,8 @@ class Node {
       && (!textbox || this.getAttribute('contenteditable') === 'true')
       && (!searchInput || this.getAttribute('type') === 'search')
       && (!checkbox || this.getAttribute('type') === 'checkbox')
-      && (!checked || this.getAttribute('aria-checked') === checked);
+      && (!checked || this.getAttribute('aria-checked') === checked)
+      && (!dataMessage || this.hasAttribute('data-message-id'));
   }
 
   closest(selector) {
@@ -186,7 +188,7 @@ test('message actions reject multiple selected rows', () => {
 
 test('accepts unlabeled semantic rows but rejects active rows outside the accepted list', () => {
   const row = option('Unread message', 'true');
-  const list = new Node('div', { role: 'listbox' }, [row]);
+   const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
   const outside = option('Read unrelated', 'true');
   const document = documentWith(list, outside);
   document.activeElement = outside;
@@ -636,7 +638,7 @@ test('factory native routes delegate exactly once and preserve physical pass-thr
       return true;
     },
   });
-  const document = documentWith();
+   const document = documentWith(new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [mailboxRow({ selected: 'true' })]));
 
   for (const [name] of ROUTES) {
     const event = eventFor(['archiveMessage', 'reply', 'shortcutHelp'].includes(name) ? 'x' : name);
@@ -656,7 +658,7 @@ test('native route methods pass through matching Outlook physical events without
       return true;
     },
   });
-  const document = documentWith();
+   const document = documentWith(new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [mailboxRow({ selected: 'true' })]));
 
   assert.equal(nativeActions.archiveMessage(document, { key: 'e', keyCode: 69 }), 'pass-through');
   assert.equal(nativeActions.reply(document, { key: 'r', keyCode: 82 }), 'pass-through');
@@ -771,6 +773,8 @@ const mailboxRow = ({ label = 'Read message', selected = 'false', read = 'read',
   const semanticLabel = label === 'Read message' && read === 'unread' ? 'Unread message'
     : label === 'Read message' && read === 'unknown' ? 'Message' : label;
   const attributes = { role: 'option', 'aria-label': semanticLabel, 'aria-selected': selected };
+  if (read !== 'unknown') attributes['data-read-state'] = read;
+  if (flagged !== null) attributes['data-flag-state'] = flagged ? 'flagged' : 'unflagged';
   if (flagged !== null) attributes['aria-pressed'] = String(flagged);
   const checkbox = new Node('input', { type: 'checkbox', 'aria-checked': selected });
   checkbox.checked = selected === 'true';
@@ -833,10 +837,10 @@ test('readContext, escapeContext, and context boundaries use the resolved contex
   assert.equal(vim.endContext(documentWith(list), eventAt(unread)), true);
   assert.deepEqual(calls, ['markRead', 'firstList']);
   assert.equal(unread.clickCount, 1);
-  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [
-    new Node('button', { 'aria-label': 'Mark as unread' }),
-  ]);
-  assert.equal(vim.readContext(documentWith(reading), eventAt(reading.children[0])), true);
+   const readingControl = new Node('button', { 'aria-label': 'Mark as unread' });
+   const readingMessage = new Node('div', { role: 'article', 'data-message-id': 'selected' }, [readingControl]);
+   const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' }, [readingMessage]);
+   assert.equal(vim.readContext(documentWith(reading), eventAt(readingControl)), true);
   assert.equal(vim.startContext(documentWith(reading), eventAt(reading.children[0])), true);
   assert.equal(vim.endContext(documentWith(reading), eventAt(reading.children[0])), true);
   assert.deepEqual(calls.slice(-2), ['topMessage', 'bottomMessage']);
@@ -877,15 +881,15 @@ test('conversation navigation prefers exact controls and uses unique ordered mes
   assert.equal(vim.previousPage(documentWith(conversation), eventAt(conversation)), true);
 });
 
-test('retains standalone message and conversation region labels only when active reading path agrees', () => {
+test('standalone message and conversation labels require an active individual message', () => {
   for (const label of ['Message', 'Conversation']) {
     const control = new Node('button', { 'aria-label': 'Mark as unread' });
-    const region = new Node('div', { role: 'region', 'aria-label': label }, [control]);
-    const document = documentWith(region);
-    assert.equal(actions.resolveContext(document, eventAt(control)), 'reading');
-    assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
-      .readContext(document, eventAt(control)), true);
-  }
+     const region = new Node('div', { role: 'region', 'aria-label': label }, [control]);
+     const document = documentWith(region);
+     assert.equal(actions.resolveContext(document, eventAt(control)), 'reading');
+     assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
+       .readContext(document, eventAt(control)), false);
+   }
 });
 
 test('absent and ambiguous diagnostics expose only stable action id and status', () => {
@@ -918,8 +922,8 @@ test('global multi-selection wins over focused folder and ambiguous list roots',
   assert.equal(selectedTwo.children[0].clickCount, 1);
 });
 
-test('selection filters use semantic tri-state ARIA tokens and never test-only state', () => {
-  const read = mailboxRow({ label: 'Read item', read: 'unknown' });
+test('selection filters use semantic tri-state row state and never subject text', () => {
+  const read = mailboxRow({ label: 'Read item', read: 'read' });
   const unread = mailboxRow({ label: 'Unread item', read: 'unread' });
   const flagged = mailboxRow({ label: 'Flagged item', read: 'unknown', flagged: true });
   const unflagged = mailboxRow({ label: 'Unflagged item', read: 'unknown', flagged: false });
@@ -1103,4 +1107,65 @@ test('escape clears mailbox multi-selection but never checks unrelated picker or
   assert.equal(mailboxFirst.children[0].clickCount, 1);
   assert.equal(mailboxSecond.children[0].clickCount, 1);
   assert.equal(pickerCheckbox.clickCount, 0);
+});
+
+test('does not infer row state from subject-style aria labels', () => {
+	for (const subject of ['Read this tomorrow', 'flagged topic']) {
+		const row = mailboxRow({ label: subject, selected: 'true', read: 'unknown' });
+		const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+		const calls = [];
+		const vim = actions.createOutlookActions({ replayShortcut: id => { calls.push(id); return true; } });
+		assert.equal(vim.readContext(documentWith(list), eventAt(row)), false);
+		assert.deepEqual(calls, []);
+	}
+});
+
+test('uses dedicated row state attributes for read and flag filters', () => {
+	const read = mailboxRow({ label: 'Read this tomorrow', read: 'unknown' });
+	read.attributes['data-read-state'] = 'read';
+	const flagged = mailboxRow({ label: 'flagged topic', read: 'unknown' });
+	flagged.attributes['data-flag-state'] = 'flagged';
+	const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [read, flagged]);
+	assert.equal(actions.selectRead(documentWith(list)), true);
+	assert.equal(actions.selectStarred(documentWith(list)), true);
+	assert.equal(read.children[0].clickCount, 1);
+	assert.equal(flagged.children[0].clickCount, 1);
+});
+
+test('reading q targets only the active individual message container', () => {
+	const firstControl = new Node('button', { 'aria-label': 'Mark as unread' });
+	const secondControl = new Node('button', { 'aria-label': 'Mark as unread' });
+	const first = new Node('div', { role: 'article', 'data-message-id': 'first' }, [firstControl]);
+	const second = new Node('div', { role: 'article', 'data-message-id': 'second' }, [secondControl]);
+	const region = new Node('div', { role: 'region', 'aria-label': 'Conversation view' }, [first, second]);
+	const document = documentWith(region);
+	assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
+		.readContext(document, eventAt(secondControl)), true);
+	assert.equal(firstControl.clickCount, 0);
+	assert.equal(secondControl.clickCount, 1);
+});
+
+test('escape does not click Back or Close in calendar or unresolved contexts', () => {
+	for (const region of [
+		new Node('div', { role: 'region', 'aria-label': 'Calendar' }, [new Node('button', { 'aria-label': 'Back' })]),
+		new Node('div', { role: 'main' }, [new Node('button', { 'aria-label': 'Close' })]),
+	]) {
+		const control = region.children[0];
+		assert.equal(actions.createOutlookActions({ replayShortcut: () => true })
+			.escapeContext(documentWith(region), eventAt(control)), false);
+		assert.equal(control.clickCount, 0);
+	}
+});
+
+test('message and list actions are rejected across unrelated contexts', () => {
+	const folderControl = new Node('div', { role: 'treeitem', 'aria-label': 'Inbox' });
+	const folder = new Node('div', { role: 'tree' }, [folderControl]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => true });
+  for (const action of ['deleteMessage', 'permanentlyDeleteMessage', 'nextMessage', 'selectAll']) {
+    assert.equal(vim[action](documentWith(folder), eventAt(folderControl)), false);
+  }
+  const reading = new Node('div', { role: 'region', 'aria-label': 'Message reading pane' });
+  for (const action of ['nextMessage', 'previousMessage', 'selectAll']) {
+    assert.equal(vim[action](documentWith(reading), eventAt(reading)), false);
+  }
 });
