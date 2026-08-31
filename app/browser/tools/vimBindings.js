@@ -2,6 +2,7 @@ const PREFIX_TIMEOUT_MS = 1000;
 const GUARDED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'DIALOG']);
 const GUARDED_ROLES = new Set(['textbox', 'searchbox', 'combobox', 'dialog']);
 const outlookActions = require('./outlookActions');
+const { createReplayClient } = require('../../outlookShortcutReplay');
 const { createVimEditing } = require('./vimEditing');
 const { lookupMailboxCommand } = require('./vimMailboxKeymap');
 
@@ -72,11 +73,18 @@ function createCommandResolver(actions, clock = {}) {
 	return { handleKeydown, reset };
 }
 
-function createVimBindings({ actions = outlookActions, document: rootDocument = globalThis.document,
+function createVimBindings({ actions = null, createActions = outlookActions.createOutlookActions,
+	createReplayClient: createReplayClientFn = createReplayClient,
+	replayOutlookShortcut = globalThis.electronAPI?.replayOutlookShortcut,
+	document: rootDocument = globalThis.document,
 	MutationObserverClass = globalThis.MutationObserver,
 	editing = null, createEditing = createVimEditing } = {}) {
 	const documentRecords = new Map();
 	const managedEditings = new Map();
+	const replayClient = createReplayClientFn({
+		send: typeof replayOutlookShortcut === 'function' ? replayOutlookShortcut : () => false,
+	});
+	const resolvedActions = actions || createActions({ replayShortcut: replayClient.request });
 	let destroyed = false;
 	let config = null;
 
@@ -103,11 +111,12 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 
 	function attachDocument(document) {
 		if (!document || documentRecords.has(document) || destroyed) return;
-		const resolver = createCommandResolver(actions);
+		const resolver = createCommandResolver(resolvedActions);
 		const editingRecord = editingForDocument(document);
 		const record = { resolver, keydownHandler: null,
 			editing: editingRecord.controller, managed: editingRecord.managed };
 		record.keydownHandler = event => {
+			if (replayClient.shouldBypass(event)) return;
 			if (record.editing.handleKeydown(event, document) !== 'pass-through') return;
 			resolver.handleKeydown(event, document);
 		};
@@ -127,6 +136,7 @@ function createVimBindings({ actions = outlookActions, document: rootDocument = 
 		destroyed = true;
 		for (const document of [...documentRecords.keys()]) detachDocument(document);
 		if (editing) editing.destroy?.();
+		replayClient.destroy?.();
 	}
 
 	return { init, destroy };

@@ -391,3 +391,56 @@ test('destroys document listeners and editing sessions exactly once', () => {
 	assert.deepEqual(editing.destroyedDocuments, [document]);
 	assert.equal(editing.destroyCalls, 1);
 });
+
+test('bypasses replayed native events before composer and mailbox routing', () => {
+	const actionCalls = [];
+	const document = createDocument();
+	const editing = createEditing(['pass-through', 'pass-through']);
+	const replayClient = {
+		request: () => true,
+		shouldBypass: event => event.key === 'N',
+		destroy() {},
+	};
+	const bindings = createVimBindings({
+		document,
+		editing,
+		createActions: () => createActions(actionCalls),
+		createReplayClient: () => replayClient,
+		replayOutlookShortcut: () => true,
+	});
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	const keydown = document.listeners.find(({ type }) => type === 'keydown').listener;
+
+	keydown(createEvent('N'));
+	assert.deepEqual(editing.calls, []);
+	assert.deepEqual(actionCalls, []);
+
+	keydown(createEvent('i', { composedPath: () => [{ tagName: 'TEXTAREA' }] }));
+	assert.equal(editing.calls.length, 1);
+
+	keydown(createEvent('c'));
+	assert.deepEqual(actionCalls, ['composeMessage']);
+});
+
+test('creates and destroys one replay client per bindings controller', () => {
+	const document = createDocument();
+	let createCalls = 0;
+	let destroyCalls = 0;
+	const replayClient = {
+		request: () => false,
+		shouldBypass: () => false,
+		destroy: () => { destroyCalls++; },
+	};
+	const bindings = createVimBindings({
+		document,
+		createReplayClient: () => { createCalls++; return replayClient; },
+	});
+
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	bindings.init({ shortcuts: { vim: { enabled: true } } });
+	bindings.destroy();
+	bindings.destroy();
+
+	assert.equal(createCalls, 1);
+	assert.equal(destroyCalls, 1);
+});

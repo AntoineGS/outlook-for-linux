@@ -3,8 +3,9 @@
 const assert = require('node:assert/strict');
 const { readFile } = require('node:fs/promises');
 const { join } = require('node:path');
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, protocol } = require('electron');
 const { AD_SUPPRESSION_CSS } = require('../../app/browser/tools/outlookAdSuppressor');
+const { registerOutlookShortcutReplay } = require('../../app/outlookShortcutReplay');
 
 const RUNTIME_FILE = join(process.cwd(), 'app', 'browser', 'generated', 'outlookBrowserRuntime.js');
 const RUNTIME_CONFIG = {
@@ -39,19 +40,43 @@ const AD_LAYOUT_HTML = `<!doctype html>
   </div>
 </body></html>`;
 
+const MAILBOX_HTML = `<!doctype html><html><body>
+  <div role="listbox" aria-label="Messages">
+    <div role="option" aria-label="Read message">Message</div>
+  </div>
+</body></html>`;
+
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function main() {
   await app.whenReady();
+  protocol.handle('https', async request => new Response(
+    request.url.includes('outlook.test/mailbox') ? MAILBOX_HTML : COMPOSER_HTML,
+    { headers: { 'content-type': 'text/html' } },
+  ));
+  const ipcMain = require('electron').ipcMain;
+  registerOutlookShortcutReplay({
+    ipcMain,
+    config: RUNTIME_CONFIG,
+    product: { isAppHost: hostname => hostname === 'outlook.test' },
+  });
   const window = new BrowserWindow({
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: { nodeIntegration: false, contextIsolation: false, sandbox: false,
+      preload: join(__dirname, 'outlookBrowserRuntimePreload.js') },
   });
   const adWindow = new BrowserWindow({
     show: false,
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true },
+    webPreferences: { nodeIntegration: false, contextIsolation: false, sandbox: false,
+      preload: join(__dirname, 'outlookBrowserRuntimePreload.js') },
+  });
+  const replayWindow = new BrowserWindow({
+    show: false,
+    webPreferences: { nodeIntegration: false, contextIsolation: false, sandbox: false,
+      preload: join(__dirname, 'outlookBrowserRuntimePreload.js') },
   });
   try {
+    const replayLoad = replayWindow.loadURL('https://outlook.test/mailbox');
     await window.loadURL(`data:text/html,${encodeURIComponent(COMPOSER_HTML)}`);
     assert.equal(await window.webContents.executeJavaScript('typeof process'), 'undefined');
     const source = await readFile(RUNTIME_FILE, 'utf8');
@@ -101,6 +126,40 @@ async function main() {
       'document.querySelectorAll("[data-vim-mode-badge]").length',
     ), 0);
 
+    await replayLoad;
+    await replayWindow.webContents.executeJavaScript(injected);
+    assert.equal(await replayWindow.webContents.executeJavaScript(
+      'typeof globalThis.electronAPI?.replayOutlookShortcut',
+    ), 'function');
+    assert.equal(await replayWindow.webContents.executeJavaScript(
+      'globalThis.__oflOutlookVimInitialized === true',
+    ), true);
+    await replayWindow.webContents.executeJavaScript(`
+      globalThis.__pageKeydowns = [];
+      document.addEventListener('keydown', event => {
+        globalThis.__pageKeydowns.push({ key: event.key, trusted: event.isTrusted });
+      }, true);
+    `);
+    await replayWindow.webContents.executeJavaScript(`
+      document.querySelector('[role="option"]').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'c', bubbles: true }),
+      );
+    `);
+    await sleep(100);
+    const replayed = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
+    assert.deepEqual(replayed.filter(event => event.trusted).map(event => event.key.toUpperCase()), ['N']);
+    assert.equal(replayed.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
+
+    await replayWindow.webContents.executeJavaScript(`
+      document.querySelector('[role="option"]').dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'e', bubbles: true }),
+      );
+    `);
+    await sleep(50);
+    const passThrough = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
+    assert.equal(passThrough.filter(event => event.trusted && event.key.toUpperCase() === 'E').length, 0);
+    assert.equal(passThrough.length, replayed.length + 1);
+
     await adWindow.loadURL(`data:text/html,${encodeURIComponent(AD_LAYOUT_HTML)}`);
     const initialAdLayout = await adWindow.webContents.executeJavaScript(`({
       slotHeight: document.querySelector('#ad-slot').getBoundingClientRect().height,
@@ -122,6 +181,8 @@ async function main() {
   } finally {
     window.destroy();
     adWindow.destroy();
+    replayWindow.destroy();
+    protocol.unhandle('https');
     await app.quit();
   }
 }
