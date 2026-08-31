@@ -24,6 +24,11 @@ const OUTLOOK_SHORTCUTS = Object.freeze({
 });
 
 const REPLAY_TIMEOUT_MS = 250;
+const NUMERIC_KEY_CODES = new Map([
+	[13, 'Enter'], [33, 'PageUp'], [34, 'PageDown'], [35, 'End'], [36, 'Home'],
+	[37, 'Left'], [38, 'Up'], [39, 'Right'], [40, 'Down'], [45, 'Insert'],
+	[46, 'Delete'], [191, '/'],
+]);
 
 function eventShortcut(event) {
 	const modifiers = event?.modifiers || [
@@ -32,9 +37,12 @@ function eventShortcut(event) {
 		event?.altKey && 'alt',
 		event?.metaKey && 'cmd',
 	].filter(Boolean);
+	const numericKey = typeof event?.keyCode === 'number'
+		? (event.keyCode >= 65 && event.keyCode <= 90
+			? String.fromCharCode(event.keyCode) : NUMERIC_KEY_CODES.get(event.keyCode)) : undefined;
 	const key = typeof event?.key === 'string' && /^[a-z]$/.test(event.key)
 		? event.key.toUpperCase() : event?.key;
-	return { keyCode: key || event?.keyCode, modifiers };
+	return { keyCode: key || numericKey || event?.keyCode, modifiers };
 }
 
 function matchesShortcut(event, shortcut) {

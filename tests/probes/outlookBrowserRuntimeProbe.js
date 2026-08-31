@@ -165,14 +165,19 @@ async function main() {
       assert.deepEqual(replayInputsAfterCompose.map(input => input.type), ['keyDown', 'keyUp']);
       assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
       assert.equal(afterCompose.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
+      const replayInputCountBeforeE = replayInputs.length;
+      const replayNCountBeforeE = replayInputsAfterCompose.length;
       await sendPhysicalKey('e');
       await sleep(100);
       const keydowns = await replayWindow.webContents.executeJavaScript('globalThis.__pageKeydowns');
       assert.equal(keydowns.filter(event => event.trusted).length, 3);
       assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'C').length, 1);
-      assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'E').length, 1);
+      assert.equal(keydowns.filter(event => event.trusted && event.key === 'e').length, 1);
       assert.equal(keydowns.filter(event => event.trusted && event.key.toUpperCase() === 'N').length, 1);
-      assert.equal(replayInputs.filter(input => input.keyCode === 'N').length, 2);
+      const inputsAfterE = replayInputs.slice(replayInputCountBeforeE);
+      assert.deepEqual(inputsAfterE.map(input => input.keyCode), ['e', 'e']);
+      assert.deepEqual(inputsAfterE.map(input => input.type), ['keyDown', 'keyUp']);
+      assert.equal(replayInputs.filter(input => input.keyCode === 'N').length, replayNCountBeforeE);
       assert.equal(keydowns.length, afterCompose.length + 1);
     };
 
@@ -197,7 +202,9 @@ async function main() {
       assert.equal(adLayout.contentHeight - initialAdLayout.contentHeight, 95);
     };
 
-    await Promise.all([runComposerCase(), runReplayCase(), runAdCase()]);
+    const results = await Promise.allSettled([runComposerCase(), runReplayCase(), runAdCase()]);
+    const rejected = results.find(result => result.status === 'rejected');
+    if (rejected) throw rejected.reason;
   } finally {
     window.destroy();
     adWindow.destroy();
