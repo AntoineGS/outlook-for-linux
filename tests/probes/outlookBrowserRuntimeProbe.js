@@ -43,7 +43,7 @@ const AD_LAYOUT_HTML = `<!doctype html>
 const MAILBOX_HTML = `<!doctype html><html><body>
   <div role="toolbar">
     <button aria-label="New mail">New mail</button>
-    <button id="read-state" aria-label="Mark as read">Mark as read</button>
+    <button id="read-state" aria-label="Read / Unread">Read / Unread</button>
   </div>
   <div role="listbox" aria-label="Messages">
     <div role="option" aria-label="Message" aria-selected="true" tabindex="0">Message</div>
@@ -198,7 +198,7 @@ async function main() {
         selected: document.querySelector('[role="option"]').getAttribute('aria-selected'),
         state: document.querySelector('#read-state').getAttribute('aria-label'),
         active: document.activeElement === document.querySelector('[role="option"]'),
-      })`), { selected: 'true', state: 'Mark as read', active: true });
+      })`), { selected: 'true', state: 'Read / Unread', active: true });
       const replayInputCountBeforeQ = replayInputs.length;
       await sendPhysicalKey('q');
       await sleep(100);

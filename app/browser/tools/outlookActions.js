@@ -18,7 +18,7 @@ const ACTION_LABELS = {
   forward: ['Forward'],
   archive: ['Archive'],
   deleteMessage: ['Delete'],
-  toggleRead: ['Mark as read', 'Mark as unread'],
+  toggleRead: ['Mark as read', 'Mark as unread', 'Read / Unread'],
   toggleFlag: ['Flag', 'Unflag', 'Flag for follow up', 'Flag this message', 'Unflag this message'],
   inbox: ['Inbox'],
   sent: ['Sent Items'],

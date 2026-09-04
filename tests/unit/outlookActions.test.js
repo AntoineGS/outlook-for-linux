@@ -1048,6 +1048,18 @@ test('readContext uses the selected conversation toolbar state when row state is
   assert.deepEqual(calls, []);
 });
 
+test('readContext recognizes the combined Read / Unread toolbar action', () => {
+  const row = mailboxRow({ selected: 'true', read: 'unknown' });
+  const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
+  const compose = new Node('button', { 'aria-label': 'New mail' });
+  const read = new Node('button', { 'aria-label': 'Read / Unread' });
+  const toolbar = new Node('div', { role: 'toolbar' }, [compose, read]);
+  const vim = actions.createOutlookActions({ replayShortcut: () => false });
+
+  assert.equal(vim.readContext(documentWith(toolbar, list), eventAt(row)), true);
+  assert.equal(read.clickCount, 1);
+});
+
 test('moveRight opens a selected row and moveLeft collapses an expanded conversation', () => {
   const row = mailboxRow({ selected: 'true' });
   const list = new Node('div', { role: 'listbox', 'aria-label': 'Inbox messages' }, [row]);
