@@ -363,7 +363,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       { name: "shortcuts", path: "./tools/shortcuts" },
       { name: "emulatePlatform", path: "./tools/emulatePlatform" },
       { name: "webauthnOverride", path: "./tools/webauthnOverride" },
-      { name: "navigationButtons", path: "./tools/navigationButtons" },
       { name: "framelessTweaks", path: "./tools/frameless" },
     ];
 

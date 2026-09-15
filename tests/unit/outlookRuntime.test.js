@@ -66,13 +66,13 @@ describe('Outlook runtime boundary', () => {
       'shortcuts',
       'emulatePlatform',
        'webauthnOverride',
-       'navigationButtons',
        'framelessTweaks',
     ]) {
       assert.ok(modules.includes(name), `expected generic module ${name}`);
     }
 
     for (const name of [
+      'navigationButtons',
       'theme',
       'timestampCopyOverride',
       'mqttStatusMonitor',
