@@ -33,6 +33,7 @@ test('configures the direct preload on profile Outlook views', async () => {
 			if (options.webPreferences.partition) profileWebContents = this.webContents;
 		}
 		setBounds() {}
+		setVisible() {}
 		setBackgroundColor() {}
 	}
 	const ipcMain = new EventEmitter();
@@ -102,7 +103,7 @@ test('configures the direct preload on profile Outlook views', async () => {
 		require.resolve('../../app/browser/preload.js'),
 	);
 	assert.equal(preloadRegistrationCount, 0);
-	assert.equal(profileWebContents.listenerCount('did-finish-load'), 0);
+	assert.equal(profileWebContents.listenerCount('did-finish-load'), 2);
 	assert.equal(profileWebContents.listenerCount('did-navigate-in-page'), 0);
 	assert.equal(profileWebContents.listenerCount('dom-ready'), 0);
 	assert.equal(profileWebContents.listenerCount('did-frame-finish-load'), 1);

@@ -1,4 +1,4 @@
-const { BrowserWindow, ipcMain } = require('electron');
+const { BrowserWindow } = require('electron');
 const path = require('node:path');
 const { moveWindow } = require('../utils/windowPositioner');
 const { registerFeatureIpc } = require('../security/featureIpc');
@@ -27,7 +27,7 @@ class IncomingCallToast {
         // Handle incoming call actions (accept/decline)
         registerFeatureIpc(true, 'on', 'incoming-call-action', (event, action) => {
             this.hide();
-            if (actionListener && typeof actionListener == 'function') {
+            if (actionListener && typeof actionListener === 'function') {
                 actionListener(action);
             }
         });

@@ -93,6 +93,14 @@ globalThis.electronAPI = {
     return ipcRenderer.send("tray-update", { icon, flash, count });
   },
 
+  onSystemThemeChanged: (callback) => {
+    if (typeof callback !== 'function') {
+      console.error('Invalid callback for theme changed');
+      return;
+    }
+    ipcRenderer.on("system-theme-changed", (_event, ...args) => callback(...args));
+  },
+
   getZoomLevel: (partition) => {
     if (typeof partition !== 'string' || partition.length > 100) {
       return Promise.reject(new Error('Invalid partition'));
@@ -114,7 +122,7 @@ globalThis.electronAPI = {
       console.error('Invalid callback for navigation state changed');
       return;
     }
-    return ipcRenderer.on("navigation-state-changed", callback);
+    ipcRenderer.on("navigation-state-changed", (_event, ...args) => callback(...args));
   },
 
   sessionType: process.env.XDG_SESSION_TYPE || "x11",
@@ -219,30 +227,26 @@ function createWebNotification(classicNotification, title, options) {
   return null;
 }
 
+// Bridges the main process's notification lifecycle onto the stubs above: close,
+// so Teams knows when the system dismissed a notification, and click, so Teams'
+// own handler can open the conversation the notification came from (issue #2768).
+// Two ipcRenderer listeners for the whole renderer, not a pair per notification.
+const NotificationBridge = require("./notifications/notificationBridge");
+const notificationBridge = new NotificationBridge(ipcRenderer);
+
 function createElectronNotification(options) {
   const notificationId = crypto.randomUUID();
   const stub = createNotificationStub();
-  let closed = false;
-  // Bridge the close event from the main process so Teams knows when
-  // the system dismisses the notification (e.g. GNOME timeout).
-  // Idempotent so stub.close() and the IPC arrival can each trigger it.
-  const finalizeClose = () => {
-    if (closed) return;
-    closed = true;
-    ipcRenderer.removeListener("notification-closed", onClosed);
-    if (stub.onclose) stub.onclose();
-  };
-  const onClosed = (_event, closedId) => {
-    if (closedId !== notificationId) return;
-    finalizeClose();
-  };
-  stub.close = finalizeClose;
   if (globalThis.electronAPI?.showNotification) {
-    ipcRenderer.on("notification-closed", onClosed);
+    // Register before invoking: main can emit click or close as soon as it has
+    // shown the notification. stub.close() from Teams and the notification-closed
+    // IPC both route through the bridge, so whichever lands first fires onclose
+    // exactly once. Without electronAPI the stub keeps its own close().
+    notificationBridge.register(notificationId, stub);
+    stub.close = () => notificationBridge.close(notificationId);
     globalThis.electronAPI
       .showNotification({ ...options, notificationId })
       .catch((e) => {
-        ipcRenderer.removeListener("notification-closed", onClosed);
         console.debug("showNotification failed", e);
       });
   }
@@ -309,12 +313,14 @@ function createCustomNotification(title, options) {
     // Default to "web" if config not loaded yet
     const method = notificationConfig?.notificationMethod || "web";
 
+    // options.title already prefers the sender over the page title (see
+    // above); web and custom need it too, or they show the open chat (#2768).
     if (method === "custom") {
-      return createCustomNotification(title, options);
+      return createCustomNotification(options.title, options);
     }
 
     if (method === "web") {
-      const notification = createWebNotification(classicNotification, title, options);
+      const notification = createWebNotification(classicNotification, options.title, options);
       return notification || { onclick: null, onclose: null, onerror: null };
     }
 
@@ -361,7 +367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
 
     // CRITICAL: These modules need ipcRenderer for IPC communication (see CLAUDE.md)
-    const modulesRequiringIpc = new Set(["webauthnOverride"]);
+    const modulesRequiringIpc = new Set(["trayIconRenderer", "mqttStatusMonitor", "webauthnOverride"]);
 
     let successCount = 0;
     for (const module of modules) {

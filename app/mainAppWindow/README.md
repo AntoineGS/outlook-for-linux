@@ -7,6 +7,7 @@ Manages the primary BrowserWindow that hosts the Teams web interface.
 - **[index.js](index.js)**: Entry point and window lifecycle management
 - **[browserWindowManager.js](browserWindowManager.js)**: Window creation, configuration, and event handling
 - **[outlookAdCss.js](outlookAdCss.js)**: Delivers only the fixed Outlook ad-suppression stylesheet to an approved main frame.
+- **[deepLinkRouter.js](deepLinkRouter.js)**: In-page routing for Teams deep links
 
 ## Responsibilities
 
@@ -64,3 +65,23 @@ These approaches either broaden the security boundary or make target/lifecycle
 selection non-deterministic. Failures are intentionally contained to the
 ad-CSS operation and are retried only by a later,
 new main-frame load event.
+
+## Deep Link Routing
+
+`onAppSecondInstance` navigates the window to a resolved deep link, which
+replaces the document and cold-boots the SPA. Launcher links avoid that:
+`deepLinkRouter` assigns the equivalent `#/l/...` route to the main frame
+instead, guarded by a check on the main frame (the configured origin, or any
+known Teams host). The SPA rewrites the fragment or retitles the document when
+it handles the route, and anything left unconsumed falls back to the full
+navigation — except during a call, where the reload would end it: the link then
+waits in `deferredDeepLink` for `teams-call-disconnected`, like a queued auth
+recovery. That slot holds one link and the newest navigation wins: a later link
+(however it ends up opening), any `did-navigate`, or a queued auth recovery
+cancels it, up to the moment it opens. After an in-page route to a chat or a
+message, `focusCompose` puts the caret in the compose box (best effort,
+selector cascade, only once the view has stopped mutating so the caret never
+lands in the chat being left, takes focus back from the highlighted message, backs
+off when the user points elsewhere, types into another field or navigates with
+the keyboard): the SPA opens the
+conversation but leaves focus wherever it was.

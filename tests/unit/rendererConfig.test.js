@@ -33,7 +33,7 @@ test('projects only configuration consumed by Outlook preload', () => {
     disableNotificationWindowFlash: true,
     disableBadgeCount: false,
     notifications: { timeoutType: 'never' },
-    auth: { webauthn: { enabled: true } },
+    auth: { webauthn: { enabled: true, extraOrigins: [] } },
   });
   assert.doesNotMatch(JSON.stringify(projected), new RegExp(secret));
   assert.notEqual(projected.notifications, source.notifications);
@@ -46,7 +46,7 @@ test('projects only configuration consumed by Outlook preload', () => {
 test('handles absent nested configuration without spreading source objects', () => {
   const projected = projectRendererConfig({});
   assert.deepEqual(projected.notifications, { timeoutType: undefined });
-  assert.deepEqual(projected.auth, { webauthn: { enabled: false } });
+  assert.deepEqual(projected.auth, { webauthn: { enabled: false, extraOrigins: [] } });
 });
 
 test('does not log the raw configuration object', () => {

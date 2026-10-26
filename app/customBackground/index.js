@@ -1,5 +1,4 @@
 const httpHelper = require("../helpers");
-const { ipcMain } = require("electron");
 const { registerFeatureIpc } = require("../security/featureIpc");
 const path = require("node:path");
 const fs = require("node:fs");

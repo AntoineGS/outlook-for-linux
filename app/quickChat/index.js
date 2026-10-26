@@ -1,4 +1,3 @@
-const { ipcMain } = require('electron');
 const QuickChatModal = require('./QuickChatModal');
 const { registerFeatureIpc } = require('../security/featureIpc');
 

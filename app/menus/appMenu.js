@@ -1,6 +1,7 @@
 const { shell } = require("electron");
 const buildProfilesMenu = require("./profilesMenu");
 const product = require("../product");
+const buildThemesMenu = require("./themesMenu");
 
 exports = module.exports = (Menus) => ({
   label: product.name,
@@ -49,6 +50,7 @@ exports = module.exports = (Menus) => ({
     getAppIconMenu(Menus),
     getPreferencesMenu(),
     getNotificationsMenu(Menus),
+    ...(product.features.screenSharing ? [getVideoMenu(Menus)] : []),
     ...(Menus.configGroup.startupConfig.multiAccount?.enabled
       ? [buildProfilesMenu(Menus)].filter(Boolean)
       : []),
@@ -79,6 +81,8 @@ function getSettingsMenu(Menus) {
   return {
     label: "Settings",
     submenu: [
+      buildThemesMenu(Menus),
+      { type: "separator" },
       ...(product.features.settingsBackup
         ? [
             {
@@ -108,6 +112,17 @@ function getSettingsMenu(Menus) {
               failed: true,
             }),
           ),
+      },
+      // Most config options are restart-only, so the file is the interface.
+      // Its directory differs per packaging format (deb, snap, flatpak,
+      // source), which is not something anyone should have to look up.
+      {
+        label: "Open config file",
+        click: () => Menus.openConfigFile(),
+      },
+      {
+        label: "Open config folder",
+        click: () => Menus.openConfigFolder(),
       },
     ],
   };

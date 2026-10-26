@@ -1,4 +1,4 @@
-name: Flatpak Smoke Build
+name: Flatpak Smoke
 
 on:
   workflow_dispatch:

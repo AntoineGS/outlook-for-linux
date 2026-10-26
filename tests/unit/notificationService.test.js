@@ -3,6 +3,8 @@
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { EventEmitter } = require('node:events');
+const v8 = require('node:v8');
+const vm = require('node:vm');
 
 const electronPath = require.resolve('electron');
 const servicePath = require.resolve('../../app/notifications/service');
@@ -12,6 +14,8 @@ let notifications;
 let dataUrls;
 let imageBuffers;
 let bufferImageEmpty;
+let sends;
+let windowActions;
 
 function installElectronMock() {
 	handlers = new Map();
@@ -19,6 +23,8 @@ function installElectronMock() {
 	dataUrls = [];
 	imageBuffers = [];
 	bufferImageEmpty = false;
+	sends = [];
+	windowActions = [];
 
 	class MockNotification extends EventEmitter {
 		constructor(options) {
@@ -86,7 +92,8 @@ function responseWith(bytes, options = {}) {
 	};
 }
 
-function makeService(fetch) {
+function makeService(fetch, options = {}) {
+	const { config = {}, windowMissing = false, windowDestroyed = false } = options;
 	const window = {
 		webContents: {
 			getURL: () => 'https://teams.microsoft.com/',
@@ -94,17 +101,17 @@ function makeService(fetch) {
 			isDestroyed: () => false,
 			send: () => {},
 		},
-		isDestroyed: () => false,
+		isDestroyed: () => windowDestroyed,
 	};
 	const mainWindow = {
-		getWindow: () => window,
-		show: () => {},
-		restoreWindow: () => {},
+		getWindow: () => (windowMissing ? null : window),
+		show: () => windowActions.push('show'),
+		restoreWindow: () => windowActions.push('restore'),
 	};
 	const NotificationService = require(servicePath);
 	const service = new NotificationService(
 		null,
-		{ appPath: '/app', defaultNotificationUrgency: 'normal' },
+		{ appPath: '/app', defaultNotificationUrgency: 'normal', ...config },
 		mainWindow,
 		() => 1,
 	);
@@ -112,8 +119,15 @@ function makeService(fetch) {
 	return service;
 }
 
-async function show(options) {
-	await handlers.get('show-notification')({}, {
+function makeSender(destroyed = false) {
+	return {
+		isDestroyed: () => destroyed,
+		send: (channel, id) => sends.push([channel, id]),
+	};
+}
+
+async function show(options, sender) {
+	await handlers.get('show-notification')({ sender }, {
 		title: 'Title',
 		body: 'Body',
 		timeoutType: 'default',
@@ -190,27 +204,21 @@ describe('NotificationService icons', () => {
 		assert.strictEqual(notifications[0].shown, true);
 	});
 
-	it('does not fetch non-HTTPS icon URLs', async () => {
-		let fetchCalls = 0;
-		makeService(async () => { fetchCalls += 1; });
+	for (const [label, icon] of [
+		['non-HTTPS icon URLs', 'http://localhost/avatar.png'],
+		['icons from a different HTTPS origin', 'https://example.com/avatar.png'],
+	]) {
+		it(`does not fetch ${label}`, async () => {
+			let fetchCalls = 0;
+			makeService(async () => { fetchCalls += 1; });
 
-		await show({ icon: 'http://localhost/avatar.png' });
+			await show({ icon });
 
-		assert.strictEqual(fetchCalls, 0);
-		assert.strictEqual('icon' in notifications[0].options, false);
-		assert.strictEqual(notifications[0].shown, true);
-	});
-
-	it('does not fetch icons from a different HTTPS origin', async () => {
-		let fetchCalls = 0;
-		makeService(async () => { fetchCalls += 1; });
-
-		await show({ icon: 'https://example.com/avatar.png' });
-
-		assert.strictEqual(fetchCalls, 0);
-		assert.strictEqual('icon' in notifications[0].options, false);
-		assert.strictEqual(notifications[0].shown, true);
-	});
+			assert.strictEqual(fetchCalls, 0);
+			assert.strictEqual('icon' in notifications[0].options, false);
+			assert.strictEqual(notifications[0].shown, true);
+		});
+	}
 
 	it('still shows the notification when fetch rejects a redirect', async () => {
 		makeService(async (_url, options) => {
@@ -247,5 +255,168 @@ describe('NotificationService icons', () => {
 		assert.strictEqual(imageBuffers.length, 1);
 		assert.strictEqual('icon' in notifications[0].options, false);
 		assert.strictEqual(notifications[0].shown, true);
+	});
+});
+
+// Teams attaches its own click handler to the stub preload's
+// createElectronNotification returns, and that handler is what opens the sending
+// conversation. Showing the window is not enough: without relaying the click back
+// to the renderer the user lands on whatever chat was already open (#2768
+// follow-up). The relay targets event.sender, not the root window, because under
+// multiAccount each profile is its own WebContentsView on its own partition.
+describe('NotificationService click and close relay', () => {
+	let originalConsoleDebug;
+	let originalConsoleWarn;
+
+	beforeEach(() => {
+		installElectronMock();
+		originalConsoleDebug = console.debug;
+		originalConsoleWarn = console.warn;
+		console.debug = () => {};
+		console.warn = () => {};
+	});
+
+	afterEach(() => {
+		console.debug = originalConsoleDebug;
+		console.warn = originalConsoleWarn;
+		cleanupElectronMock();
+	});
+
+	for (const [label, clickAction, notificationId, expectedWindow, expectedSends] of [
+		['relays the click to the creating renderer with the notification id', undefined, 'notif-1', ['show'], [['notification-clicked', 'notif-1']]],
+		['relays the click when clickAction is "restore"', 'restore', 'notif-2', ['restore'], [['notification-clicked', 'notif-2']]],
+		['does not touch the window or relay when clickAction is "none"', 'none', 'notif-3', [], []],
+	]) {
+		it(label, async () => {
+			makeService(async () => {}, {
+				config: clickAction ? { notifications: { electron: { clickAction } } } : {},
+			});
+
+			await show({ notificationId }, makeSender());
+			notifications[0].emit('click');
+
+			assert.deepStrictEqual(windowActions, expectedWindow);
+			assert.deepStrictEqual(sends, expectedSends);
+		});
+	}
+
+	it('does not throw or relay when the window is gone', async () => {
+		makeService(async () => {}, { windowMissing: true });
+
+		await show({ notificationId: 'notif-4' }, makeSender());
+		notifications[0].emit('click');
+
+		assert.deepStrictEqual(windowActions, []);
+		assert.deepStrictEqual(sends, []);
+	});
+
+	it('does not relay when the window is destroyed', async () => {
+		makeService(async () => {}, { windowDestroyed: true });
+
+		await show({ notificationId: 'notif-5' }, makeSender());
+		notifications[0].emit('click');
+
+		assert.deepStrictEqual(windowActions, []);
+		assert.deepStrictEqual(sends, []);
+	});
+
+	it('still shows the window when the sender is destroyed, but sends nothing', async () => {
+		makeService(async () => {});
+
+		await show({ notificationId: 'notif-6' }, makeSender(true));
+		notifications[0].emit('click');
+
+		assert.deepStrictEqual(windowActions, ['show']);
+		assert.deepStrictEqual(sends, []);
+	});
+
+	it('relays close to the creating renderer', async () => {
+		makeService(async () => {});
+
+		await show({ notificationId: 'notif-7' }, makeSender());
+		notifications[0].emit('close');
+
+		assert.deepStrictEqual(sends, [['notification-closed', 'notif-7']]);
+	});
+});
+
+// Electron's Notification is only weakly held by V8. Once the JS object is
+// collected the native notification loses its delegate, so a click from the
+// GNOME or KDE notification list, after the banner has gone, reaches no
+// handler (#3121). A forced full collection shows what the service still holds.
+v8.setFlagsFromString('--expose-gc');
+const gc = vm.runInNewContext('gc');
+
+async function collectGarbage() {
+	// WeakRef targets stay alive until the current job ends.
+	await new Promise((resolve) => setImmediate(resolve));
+	gc();
+}
+
+// Swap the mock's strong references for weak ones, so only the service can
+// keep a notification alive.
+function releaseMockReferences() {
+	const refs = notifications.map((notification) => new WeakRef(notification));
+	notifications.length = 0;
+	return refs;
+}
+
+describe('NotificationService keeps notifications alive', () => {
+	let originalConsoleDebug;
+	let originalConsoleWarn;
+
+	beforeEach(() => {
+		installElectronMock();
+		originalConsoleDebug = console.debug;
+		originalConsoleWarn = console.warn;
+		console.debug = () => {};
+		console.warn = () => {};
+	});
+
+	afterEach(() => {
+		console.debug = originalConsoleDebug;
+		console.warn = originalConsoleWarn;
+		cleanupElectronMock();
+	});
+
+	it('still relays a click that arrives after a garbage collection', async () => {
+		makeService(async () => {});
+
+		await show({ notificationId: 'live-1' }, makeSender());
+		const [ref] = releaseMockReferences();
+		await collectGarbage();
+
+		assert.ok(ref.deref(), 'notification was collected while still clickable');
+		ref.deref().emit('click');
+		assert.deepStrictEqual(sends, [['notification-clicked', 'live-1']]);
+	});
+
+	for (const event of ['click', 'close']) {
+		it(`lets go of the notification once it emits ${event}`, async () => {
+			makeService(async () => {});
+
+			await show({ notificationId: `live-${event}` }, makeSender());
+			const [ref] = releaseMockReferences();
+			await collectGarbage();
+			assert.ok(ref.deref(), 'notification was collected before it emitted');
+
+			ref.deref().emit(event);
+			await collectGarbage();
+			assert.strictEqual(ref.deref(), undefined);
+		});
+	}
+
+	it('lets go of the oldest notification once more than 50 are live', async () => {
+		makeService(async () => {});
+
+		// 50 is MAX_TRACKED_NOTIFICATIONS in app/notifications/service.js.
+		for (let i = 0; i <= 50; i++) {
+			await show({ notificationId: `live-${i}` }, makeSender());
+		}
+		const refs = releaseMockReferences();
+		await collectGarbage();
+
+		assert.strictEqual(refs[0].deref(), undefined);
+		assert.ok(refs.slice(1).every((ref) => ref.deref()), 'a newer notification was collected');
 	});
 });

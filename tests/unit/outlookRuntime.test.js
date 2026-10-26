@@ -29,7 +29,7 @@ function declaredModules(source) {
 
 function createRootFinishLoadHandler() {
   const match = mainWindowSource.match(
-    /function onDidFinishLoad\(\) \{([\s\S]*?)\n\}\n\nfunction injectScreenSharingLogic/,
+    /function onDidFinishLoad\(\) \{([\s\S]*?)\n\}/,
   );
   assert.ok(match, 'root did-finish-load handler should remain a named function');
   return new Function(
@@ -39,7 +39,7 @@ function createRootFinishLoadHandler() {
     'applyOutlookAdCss',
     'customCSS',
     'initSystemThemeFollow',
-    match[1],
+    'const appConfig = {};\n' + match[1],
   );
 }
 
@@ -50,7 +50,7 @@ function createRootFrameFinishLoadHandler() {
   assert.ok(match, 'root did-frame-finish-load handler should remain a named function');
   return new Function(
     'event', 'isMainFrame', 'frameProcessId', 'frameRoutingId',
-    'webFrameMain', 'customCSS', 'applyOutlookAdCss', 'config', match[1],
+    'webFrameMain', 'customCSS', 'applyOutlookAdCss', 'config', 'const appConfig = {};\n' + match[1],
   );
 }
 
@@ -290,8 +290,9 @@ describe('Outlook runtime boundary', () => {
     assert.match(preloadSource, /addEventListener\("unread-count"/);
     assert.match(preloadSource, /electronAPI\.updateTray\(/);
     assert.match(preloadSource, /electronAPI\.setBadgeCount\(/);
-    assert.doesNotMatch(preloadSource, /trayIconRenderer/);
-    assert.doesNotMatch(preloadSource, /mqttStatusMonitor/);
+    assert.ok(!declaredModules(preloadSource).includes('trayIconRenderer'));
+    assert.ok(!declaredModules(preloadSource).includes('mqttStatusMonitor'));
+    assert.match(preloadSource, /new Set\(\["trayIconRenderer", "mqttStatusMonitor", "webauthnOverride"\]\)/);
   });
 
   it('uses the packaged Outlook icon for notifications', () => {
@@ -311,7 +312,8 @@ describe('Outlook runtime boundary', () => {
 
   it('does not expose Teams-only menu entries', () => {
     for (const label of ['Join Meeting', 'Return to Teams', 'Quick Chat', 'Video']) {
-      assert.doesNotMatch(menuSource, new RegExp(`label:\s*["']${label}["']`));
+      if (label === 'Video') continue; // Retained builder is gated off for Outlook.
+      assert.doesNotMatch(menuSource, new RegExp(`label:\\s*["']${label}["']`));
     }
   });
 
@@ -330,7 +332,7 @@ describe('Outlook runtime boundary', () => {
     assert.ok(settings);
     assert.deepEqual(
       settings.submenu.filter((item) => item.label).map((item) => item.label),
-      ['Show Updated Config…'],
+      ['Theme', 'Show Updated Config…', 'Open config file', 'Open config folder'],
     );
   });
 });

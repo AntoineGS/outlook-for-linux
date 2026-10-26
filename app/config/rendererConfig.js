@@ -16,6 +16,9 @@ function projectRendererConfig(config = {}) {
     auth: {
       webauthn: {
         enabled: config.auth?.webauthn?.enabled === true,
+        extraOrigins: Array.isArray(config.auth?.webauthn?.extraOrigins)
+          ? config.auth.webauthn.extraOrigins.filter(origin => typeof origin === 'string')
+          : [],
       },
     },
   };

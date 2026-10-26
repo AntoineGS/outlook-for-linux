@@ -1,4 +1,3 @@
-const { ipcMain } = require('electron');
 const path = require('node:path');
 const createDialogWindow = require('../_shared/createDialogWindow');
 const { registerFeatureIpc } = require('../security/featureIpc');

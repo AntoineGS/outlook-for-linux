@@ -156,6 +156,32 @@ jobs:
         if: github.ref != 'refs/heads/main'
         run: npm run dist:linux:x64 -- --publish never
 
+      - name: Smoke-launch the packaged app
+        # e2e launches app/index.js from the checkout, so this is the only check
+        # that the build.files allowlist ships everything the app loads. The
+        # app must finish navigating to Teams, still be running after 60s
+        # (timeout exits 124), and log no missing-module error. 60s leaves
+        # room for the up-to-20s connectivity probe on a slow runner.
+        run: |
+          export E2E_USER_DATA_DIR="$(mktemp -d)"
+          set +e
+          timeout 60 xvfb-run --auto-servernum dist/linux-unpacked/outlook-for-linux --no-sandbox > smoke.log 2>&1
+          status=$?
+          set -e
+          cat smoke.log
+          if grep -qE "Cannot find module|MODULE_NOT_FOUND|A JavaScript error occurred in the main process" smoke.log; then
+            echo "::error::packaged app failed to load a module"
+            exit 1
+          fi
+          if [ "$status" -ne 124 ]; then
+            echo "::error::packaged app exited after less than 60s (status $status)"
+            exit 1
+          fi
+          if ! grep -q "\[CONNECTION\] Teams navigation finished" smoke.log; then
+            echo "::error::packaged app never finished navigating to Teams"
+            exit 1
+          fi
+
       - name: Upload Linux x64 artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -217,60 +243,24 @@ jobs:
           retention-days: 30
           compression-level: 6
 
-  linux_arm:
-    needs: [lint_and_audit]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Check out Git repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install Node.js and NPM
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-
-      - name: Build
-        # --ignore-scripts blocks arbitrary dependency lifecycle scripts; the
-        # explicit postinstall keeps electron-builder install-app-deps (native
-        # dep rebuild) that packaging needs.
-        run: |
-          npm ci --ignore-scripts
-          npm run postinstall
-
-      - name: Validate Release Notes
-        run: |
-          test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
-          npm run generate-release-info
-
-      - name: Build for Release
-        if: github.ref == 'refs/heads/main'
-        run: npm run dist:linux:arm -- --publish never
-
-      - name: Build for PR
-        if: github.ref != 'refs/heads/main'
-        run: npm run dist:linux:arm -- --publish never
-
-      - name: Upload PR artifacts
-        if: github.ref != 'refs/heads/main'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: outlook-for-linux-linux-armv7l
-          path: |
-            dist/*.deb
-            dist/*.rpm
-            dist/*.tar.gz
-            dist/*.AppImage
-          retention-days: 30
-          compression-level: 6
-
   dmg:
     needs: [lint_and_audit]
     runs-on: macos-latest
     permissions:
       contents: write
+    env:
+      # Apple Silicon refuses to exec an arm64 binary without a valid code
+      # signature, and afterpack.js invalidates the one Electron ships by
+      # flipping fuses — so the arm64 .app has to be re-signed or it will not
+      # launch at all. `dist:mac` asks electron-builder for an ad-hoc signature
+      # (-c.mac.identity=-), which needs no certificate.
+      #
+      # electron-builder skips every signing step on pull requests (it treats
+      # GITHUB_BASE_REF as a PR marker) unless this is set. No signing
+      # certificates are configured for this project, so the only thing it can
+      # re-enable is that ad-hoc signature — there is no secret to leak to a
+      # fork PR here.
+      CSC_FOR_PULL_REQUEST: "true"
 
     steps:
       - name: Check out Git repository
@@ -294,22 +284,42 @@ jobs:
           test -f io.github.AntoineGS.outlook_for_linux.appdata.xml
           npm run generate-release-info
 
+      # Both architectures are built in a single electron-builder run on
+      # purpose. macOS update metadata is not arch-suffixed the way Linux's is,
+      # so every mac build writes the same `latest-mac.yml`; two runs would
+      # each emit a single-arch copy and the second publish would overwrite the
+      # first. One run merges both arches into that file instead. The in-app
+      # updater is AppImage-only today (app/autoUpdater/index.js), so nothing
+      # reads it yet — this just keeps it correct if that ever changes.
       - name: Build for Release
         if: github.ref == 'refs/heads/main'
-        run: npm run dist:mac:x64 -- --publish never
+        run: npm run dist:mac -- --publish never
 
       - name: Build for PR
         if: github.ref != 'refs/heads/main'
-        run: npm run dist:mac:x64 -- --publish never
+        run: npm run dist:mac -- --publish never
 
-      - name: Upload PR artifacts
+      - name: Upload PR artifacts (x64)
         if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: outlook-for-linux-macos-x64
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            !dist/*-arm64.dmg
           retention-days: 30
-          compression-level: 6
+          # A .dmg is already compressed, and GitHub always wraps artifacts in
+          # a zip on download — store it rather than pay to recompress it.
+          compression-level: 0
+
+      - name: Upload PR artifacts (arm64)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: outlook-for-linux-macos-arm64
+          path: dist/*-arm64.dmg
+          retention-days: 30
+          compression-level: 0
 
   exe:
     needs: [lint_and_audit]
